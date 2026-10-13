@@ -5,7 +5,7 @@ import { useShop } from '../lib/ShopContext'
 import { useToast } from '../components/Toast'
 import { StageBadge, PayBadge } from '../components/Badges'
 import { exportOrders } from '../lib/exportUtils'
-import { orderNo, inr, fmtDate, rangeFor, fyOptions, fyLabel, yearOptions, currentFY, PAY, r2 } from '../lib/orderUtils'
+import { orderNo, inr, fmtDate, rangeFor, fyOptions, fyLabel, yearOptions, currentFY, PAY, r2, billUrl } from '../lib/orderUtils'
 
 const MODES = [['all', 'All time'], ['today', 'Today'], ['month', 'This month'], ['lastmonth', 'Last month'], ['pickmonth', 'Pick a month'], ['year', 'Year'], ['fy', 'Financial year'], ['custom', 'Custom range']]
 
@@ -89,7 +89,21 @@ export default function OrdersPage() {
       <div className="order-cards">
         {shown.map(o => (
           <Link key={o.id} to={`/orders/${o.id}`} className={`order-card ${o.stage_key === 'returned' ? 'is-returned' : ''}`}>
-            <div className="row"><b>{o.customer_name}</b><b>{inr(o.total)}</b></div>
+            <div className="row">
+              <b>{o.customer_name}</b>
+              <div style={{ textAlign: 'right' }}>
+                <b>{inr(o.total)}</b>
+                {o.bill_path && (
+                  <span
+                    className="badge"
+                    style={{ marginLeft: 6, background: 'var(--teal-glow)', color: 'var(--teal-dark)', fontSize: '.72rem', cursor: 'pointer' }}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(billUrl(o, settings), '_blank') }}
+                  >
+                    ⬇️ Bill
+                  </span>
+                )}
+              </div>
+            </div>
             <div className="row mt-1"><span className="text-muted mono" style={{ fontSize: '.75rem' }}>{orderNo(o, settings)} · {fmtDate(o.created_at)}</span></div>
             <div className="flex gap-2 mt-2" style={{ flexWrap: 'wrap' }}><StageBadge stages={stages} k={o.stage_key} /><PayBadge status={o.payment_status} /></div>
           </Link>))}
@@ -97,11 +111,24 @@ export default function OrdersPage() {
 
       {/* Tablet / desktop: table */}
       {!!shown.length && <div className="card order-table" style={{ padding: 0 }}><div className="table-wrap"><table>
-        <thead><tr><th>Order</th><th>Date</th><th>Customer</th><th>Status</th><th>Payment</th><th style={{ textAlign: 'right' }}>Total</th></tr></thead>
+        <thead><tr><th>Order</th><th>Date</th><th>Customer</th><th>Status</th><th>Payment</th><th style={{ textAlign: 'right' }}>Total</th><th></th></tr></thead>
         <tbody>{shown.map(o => (
           <tr key={o.id} className={`row-link ${o.stage_key === 'returned' ? 'is-returned' : ''}`} onClick={() => nav(`/orders/${o.id}`)}>
             <td className="mono">{orderNo(o, settings)}</td><td>{fmtDate(o.created_at)}</td><td><b>{o.customer_name}</b><div className="text-muted" style={{ fontSize: '.75rem' }}>{o.customer_whatsapp || o.customer_email || ''}</div></td>
-            <td><StageBadge stages={stages} k={o.stage_key} /></td><td><PayBadge status={o.payment_status} /></td><td style={{ textAlign: 'right' }}><b>{inr(o.total)}</b></td>
+            <td><StageBadge stages={stages} k={o.stage_key} /></td><td><PayBadge status={o.payment_status} /></td>
+            <td style={{ textAlign: 'right' }}><b>{inr(o.total)}</b></td>
+            <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+              {o.bill_path && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ padding: '4px 8px', fontSize: '.75rem', minHeight: 28 }}
+                  title="Download bill"
+                  onClick={(e) => { e.stopPropagation(); window.open(billUrl(o, settings), '_blank') }}
+                >
+                  ⬇️ Bill
+                </button>
+              )}
+            </td>
           </tr>))}</tbody></table></div></div>}
     </div>
   )

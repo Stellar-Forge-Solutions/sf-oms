@@ -24,6 +24,7 @@ export function whatsappText(order, settings, shop) {
     `Payment: ${PAY[order.payment_status]?.label}${order.payment_status === 'partial' ? ` (${inr(order.amount_paid)} received)` : ''}`, '',
     `Track your order: ${trackUrl(order, settings)}`,
   ]
+  if (order.tracking_url) out.push(`Courier tracking: ${order.tracking_url}`)
   if (bill) out.push(`Download your bill: ${bill}`)
   out.push('', 'Thank you for choosing us.', `*${shop.name}*`)
   if (shop.mobile) out.push(`Call us: ${shop.mobile}`)

@@ -5,6 +5,7 @@ import { useShop } from '../lib/ShopContext'
 import { useToast } from '../components/Toast'
 import ItemSheet from '../components/ItemSheet'
 import NotifyModal from '../components/NotifyModal'
+import TrackingModal from '../components/TrackingModal'
 import { StageBadge, PayBadge } from '../components/Badges'
 import { guardWrite, logoDataUrl, logoUrl } from '../lib/shop'
 import { bluetoothPrint } from '../lib/print'
@@ -18,6 +19,7 @@ export default function OrderDetail() {
   const stages = settings.stages, f = settings.fields, tax = taxActive(settings)
   const [o, setO] = useState(null), [items, setItems] = useState([]), [events, setEvents] = useState([]), [products, setProducts] = useState([])
   const [sheet, setSheet] = useState(false), [notify, setNotify] = useState(false)
+  const [trackingModal, setTrackingModal] = useState(false)
   const [pay, setPay] = useState('unpaid'), [paid, setPaid] = useState('')
   const [busy, setBusy] = useState('')
 
@@ -39,13 +41,40 @@ export default function OrderDetail() {
   const staleBill = o.bill_path && o.bill_source === 'generated' && new Date(o.updated_at) - new Date(o.bill_updated_at || 0) > 2000
 
   // ── actions ──
-  const move = async (target) => {
+  const move = async (target, trackingUrl = null) => {
     if (!guardWrite('Changing status')) return
+    if (target.key === 'ready' && trackingUrl === null && o.stage_key !== 'ready') {
+      return setTrackingModal(true)
+    }
     setBusy('stage')
-    const { data, error } = await supabase.from('orders').update({ stage_key: target.key }).eq('id', o.id).select().single()
+    const patch = { stage_key: target.key }
+    if (trackingUrl) patch.tracking_url = trackingUrl
+    let { data, error } = await supabase.from('orders').update(patch).eq('id', o.id).select().single()
+    if (error && error.message?.includes('tracking_url')) {
+      // If tracking_url column is not migrated yet in Supabase, update stage_key alone
+      const res = await supabase.from('orders').update({ stage_key: target.key }).eq('id', o.id).select().single()
+      data = res.data; error = res.error
+      if (trackingUrl && !error) {
+        // preserve tracking url inside order notes as fallback
+        const notesWithTracking = (o.notes ? o.notes + '\n' : '') + `Tracking: ${trackingUrl}`
+        await supabase.from('orders').update({ notes: notesWithTracking }).eq('id', o.id)
+      }
+    }
     if (error) { setBusy(''); return toast(error.message, 'error') }
     await supabase.from('order_events').insert({ order_id: o.id, shop_id: shop.id, stage_key: target.key, stage_label: target.label })
-    setBusy(''); setO(data); await load(); setNotify(true)
+    setBusy(''); setO(data || { ...o, ...patch }); await load(); setNotify(true)
+  }
+
+  const handleTrackingSave = async (trackingUrl) => {
+    setTrackingModal(false)
+    const readyStage = stages.find(s => s.key === 'ready') || next
+    await move(readyStage, trackingUrl || '')
+  }
+
+  const handleTrackingSkip = async () => {
+    setTrackingModal(false)
+    const readyStage = stages.find(s => s.key === 'ready') || next
+    await move(readyStage, '')
   }
 
   const savePay = async () => {
@@ -138,6 +167,17 @@ export default function OrderDetail() {
           {prev && <button className="btn btn-ghost" disabled={!!busy || !canWrite} onClick={() => move(prev)}>← Back to {prev.label}</button>}
           {next && <button className="btn btn-primary" style={{ flex: 1 }} disabled={!!busy || !canWrite} onClick={() => move(next)}>{busy === 'stage' ? 'Moving…' : `Move to ${next.label} →`}</button>}
           <button className="btn btn-secondary" onClick={() => setNotify(true)}>🔔 Notify customer</button>
+          {o.bill_path && (
+            <a
+              className="btn btn-secondary"
+              href={billUrl(o, settings)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              ⬇️ Download bill
+            </a>
+          )}
         </div>
       </div>
 
@@ -146,14 +186,45 @@ export default function OrderDetail() {
           {/* Items */}
           <div className="card" style={{ marginBottom: 14 }}>
             <div className="card-header"><div className="section-title">Items</div><button className="btn btn-primary btn-sm" disabled={!canWrite} onClick={() => setSheet(true)}>+ Add product</button></div>
-            {items.map(it => { const l = calcLine(it); return (
-              <div className="item-row" key={it.id}>
-                <div style={{ minWidth: 0 }}><b>{it.name}</b>
-                  <div className="text-muted" style={{ fontSize: '.78rem' }}>{Number(it.quantity)}{f.unit && it.unit ? ' ' + it.unit : ''} × {inr(it.unit_price)}{f.category && it.category ? ` · ${it.category}` : ''}{tax && l.tax > 0 ? ` · tax ${inr(l.tax)}` : ''}</div>
-                  {f.description && it.description && <div className="text-muted" style={{ fontSize: '.78rem' }}>{it.description}</div>}</div>
-                <b style={{ flexShrink: 0 }}>{inr(l.total)}</b>
-              </div>) })}
-            <div className="divider" />
+            <div className="items-table-wrap">
+              <table className="items-table">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th className="num">Qty</th>
+                    <th className="num">Rate</th>
+                    {tax && <th className="num">Tax</th>}
+                    <th className="num">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map(it => {
+                    const l = calcLine(it)
+                    return (
+                      <tr key={it.id}>
+                        <td>
+                          <b>{it.name}</b>
+                          {((f.category && it.category) || (f.description && it.description)) && (
+                            <div className="text-muted" style={{ fontSize: '.75rem', marginTop: 2 }}>
+                              {f.category && it.category ? it.category : ''}
+                              {f.category && it.category && f.description && it.description ? ' · ' : ''}
+                              {f.description && it.description ? it.description : ''}
+                            </div>
+                          )}
+                        </td>
+                        <td className="num">
+                          {Number(it.quantity)}{f.unit && it.unit ? ' ' + it.unit : ''}
+                        </td>
+                        <td className="num">{inr(it.unit_price)}</td>
+                        {tax && <td className="num">{l.tax > 0 ? inr(l.tax) : '–'}</td>}
+                        <td className="num"><b>{inr(l.total)}</b></td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="divider" style={{ marginTop: 4 }} />
             <div className="tot-row"><span>Subtotal</span><span>{inr(o.subtotal)}</span></div>
             {Number(o.cgst_amt) > 0 && <div className="tot-row"><span>CGST</span><span>{inr(o.cgst_amt)}</span></div>}
             {Number(o.sgst_amt) > 0 && <div className="tot-row"><span>SGST</span><span>{inr(o.sgst_amt)}</span></div>}
@@ -220,6 +291,14 @@ export default function OrderDetail() {
       </div>
 
       {sheet && <ItemSheet item={null} products={products} settings={settings} onSave={addItem} onClose={() => setSheet(false)} />}
+      {trackingModal && (
+        <TrackingModal
+          order={o}
+          onSave={handleTrackingSave}
+          onSkip={handleTrackingSkip}
+          onClose={() => setTrackingModal(false)}
+        />
+      )}
       {notify && <NotifyModal order={o} settings={settings} shop={shop} onClose={() => setNotify(false)} />}
     </div>
   )

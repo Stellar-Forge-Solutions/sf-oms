@@ -5,7 +5,8 @@ import { useShop } from '../lib/ShopContext'
 import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../components/Toast'
 import ItemSheet from '../components/ItemSheet'
-import { guardWrite } from '../lib/shop'
+import { guardWrite, logoDataUrl } from '../lib/shop'
+import { buildBillPdf } from '../lib/billDoc'
 import { calcLine, calcOrder, orderRowTotals, itemRow, inr, r2, digits10, taxActive, PAY } from '../lib/orderUtils'
 
 // One screen for both "new order" and "edit order". Fields shown depend on Settings.
@@ -25,6 +26,8 @@ export default function OrderForm() {
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
   const [sheet, setSheet] = useState(null)       // null | { index, item }
+  const [billOption, setBillOption] = useState('none') // 'none' | 'generate' | 'upload'
+  const [billFile, setBillFile] = useState(null)
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(!!id), [err, setErr] = useState('')
 
   useEffect(() => {
@@ -137,6 +140,7 @@ export default function OrderForm() {
       ...orderRowTotals(totals, effPct), updated_at: new Date().toISOString(),
     }
     let orderId = id
+    let createdOrder = null
     if (id) {
       let { error } = await supabase.from('orders').update(row).eq('id', id)
       if (error && (error.message?.includes('discount_percent') || error.message?.includes('discount_amount'))) {
@@ -155,6 +159,7 @@ export default function OrderForm() {
       }
       if (error) { setBusy(false); return setErr(error.message) }
       orderId = data.id
+      createdOrder = data
       await supabase.from('order_events').insert({ order_id: orderId, shop_id: shop.id, stage_key: first.key, stage_label: first.label })
     }
     const lines = items.map(it => ({
@@ -208,8 +213,33 @@ export default function OrderForm() {
       }
     } catch {}
 
+    // Bill generation or upload (if selected on new order)
+    if (!id && billOption !== 'none') {
+      try {
+        if (billOption === 'generate') {
+          const logo = await logoDataUrl(shop)
+          const fullOrder = { ...row, id: orderId, order_no: createdOrder?.order_no || 1, created_at: new Date().toISOString() }
+          const blob = await buildBillPdf({ order: fullOrder, items, shop, settings, logo })
+          const path = `${shop.id}/${orderId}/bill-${Date.now()}.pdf`
+          const up = await supabase.storage.from('order-bills').upload(path, blob, { contentType: 'application/pdf' })
+          if (!up.error) {
+            await supabase.from('orders').update({ bill_path: path, bill_source: 'generated', bill_updated_at: new Date().toISOString() }).eq('id', orderId)
+          }
+        } else if (billOption === 'upload' && billFile) {
+          const ext = (billFile.name.split('.').pop() || 'pdf').toLowerCase()
+          const path = `${shop.id}/${orderId}/bill-${Date.now()}.${ext}`
+          const up = await supabase.storage.from('order-bills').upload(path, billFile, { contentType: billFile.type || 'application/octet-stream' })
+          if (!up.error) {
+            await supabase.from('orders').update({ bill_path: path, bill_source: 'uploaded', bill_updated_at: new Date().toISOString() }).eq('id', orderId)
+          }
+        }
+      } catch (be) {
+        console.error('Bill processing error on order creation:', be)
+      }
+    }
+
     setBusy(false)
-    toast(id ? 'Order updated' : 'Order created')
+    toast(id ? 'Order updated' : (billOption === 'generate' ? 'Order created & bill generated' : (billOption === 'upload' && billFile ? 'Order created & bill attached' : 'Order created')))
     nav(`/orders/${orderId}${id ? '' : '?notify=1'}`, { replace: true })
   }
 
@@ -260,23 +290,53 @@ export default function OrderForm() {
         <div className="card-header"><div className="section-title">Items</div>
           <button className="btn btn-primary btn-sm" onClick={() => setSheet({ index: null, item: null })}>+ Add item</button></div>
         {!items.length && <div className="empty-state" style={{ padding: 24 }}><div className="empty-state-text">No items yet. Tap “Add item”.</div></div>}
-        {items.map((it, i) => { const l = calcLine(it); return (
-          <div className="item-row" key={i}>
-            <div style={{ minWidth: 0 }}>
-              <b>{it.name}</b>
-              <div className="text-muted" style={{ fontSize: '.78rem' }}>
-                {Number(it.quantity)}{f.unit && it.unit ? ' ' + it.unit : ''} × {inr(it.unit_price)}{f.category && it.category ? ` · ${it.category}` : ''}{tax && l.tax > 0 ? ` · tax ${inr(l.tax)}` : ''}
-              </div>
-              {f.description && it.description && <div className="text-muted" style={{ fontSize: '.78rem' }}>{it.description}</div>}
-            </div>
-            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <b>{inr(l.total)}</b>
-              <div className="flex gap-2 mt-1" style={{ justifyContent: 'flex-end' }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => setSheet({ index: i, item: it })}>Edit</button>
-                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setItems(items.filter((_, n) => n !== i))}>Delete</button>
-              </div>
-            </div>
-          </div>) })}
+        {items.length > 0 && (
+          <div className="items-table-wrap">
+            <table className="items-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th className="num">Qty</th>
+                  <th className="num">Rate</th>
+                  {tax && <th className="num">Tax</th>}
+                  <th className="num">Total</th>
+                  <th className="num">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it, i) => {
+                  const l = calcLine(it)
+                  return (
+                    <tr key={i}>
+                      <td>
+                        <b>{it.name}</b>
+                        {((f.category && it.category) || (f.description && it.description)) && (
+                          <div className="text-muted" style={{ fontSize: '.75rem', marginTop: 2 }}>
+                            {f.category && it.category ? it.category : ''}
+                            {f.category && it.category && f.description && it.description ? ' · ' : ''}
+                            {f.description && it.description ? it.description : ''}
+                          </div>
+                        )}
+                      </td>
+                      <td className="num">
+                        {Number(it.quantity)}{f.unit && it.unit ? ' ' + it.unit : ''}
+                      </td>
+                      <td className="num">{inr(it.unit_price)}</td>
+                      {tax && <td className="num">{l.tax > 0 ? inr(l.tax) : '–'}</td>}
+                      <td className="num"><b>{inr(l.total)}</b></td>
+                      <td className="num">
+                        <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
+                          <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px', minHeight: 30, fontSize: '.75rem' }} onClick={() => setSheet({ index: i, item: it })}>Edit</button>
+                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', padding: '4px 8px', minHeight: 30, fontSize: '.75rem' }} onClick={() => setItems(items.filter((_, n) => n !== i))}>✕</button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ marginBottom: 14 }}>
@@ -330,6 +390,71 @@ export default function OrderForm() {
         {totals.freight > 0 && <div className="tot-row"><span>Freight / delivery</span><span>{inr(totals.freight)}</span></div>}
         <div className="tot-row grand"><span>Total</span><span>{inr(totals.total)}</span></div>
       </div>
+
+      {!id && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="section-title" style={{ marginBottom: 6 }}>Bill (Invoice)</div>
+          <p className="text-muted" style={{ fontSize: '.8rem', marginBottom: 12 }}>
+            Optionally generate an instant PDF bill or attach an existing bill photo/PDF for this order.
+          </p>
+
+          <div className="seg" style={{ marginBottom: 12 }}>
+            <button
+              type="button"
+              className={billOption === 'none' ? 'on' : ''}
+              onClick={() => { setBillOption('none'); setBillFile(null) }}
+            >
+              Later
+            </button>
+            <button
+              type="button"
+              className={billOption === 'generate' ? 'on' : ''}
+              onClick={() => { setBillOption('generate'); setBillFile(null) }}
+            >
+              ⚡ Auto-generate
+            </button>
+            <button
+              type="button"
+              className={billOption === 'upload' ? 'on' : ''}
+              onClick={() => setBillOption('upload')}
+            >
+              📁 Upload bill
+            </button>
+          </div>
+
+          {billOption === 'generate' && (
+            <div className="hint-box" style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#166534', marginBottom: 0 }}>
+              ✓ A clean PDF bill with shop logo, QR code, and items table will be generated and attached automatically when this order is created.
+            </div>
+          )}
+
+          {billOption === 'upload' && (
+            <div style={{ marginTop: 8 }}>
+              <input
+                type="file"
+                accept=".pdf,image/png,image/jpeg"
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) {
+                    if (f.size > 10 * 1024 * 1024) {
+                      toast('File is too big (max 10 MB)', 'error')
+                      e.target.value = ''
+                      setBillFile(null)
+                    } else {
+                      setBillFile(f)
+                    }
+                  }
+                }}
+              />
+              {billFile && (
+                <div className="text-muted" style={{ fontSize: '.78rem', marginTop: 6, color: 'var(--teal-dark)' }}>
+                  Selected: <b>{billFile.name}</b> ({(billFile.size / 1024).toFixed(1)} KB)
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {err && <div className="err-text" style={{ marginBottom: 10 }}>✕ {err}</div>}
       <button className="btn btn-primary btn-full btn-lg" onClick={save} disabled={busy}>{busy ? 'Saving…' : id ? 'Save changes' : 'Create order'}</button>

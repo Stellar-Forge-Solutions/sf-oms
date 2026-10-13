@@ -14,11 +14,6 @@ export default function ItemSheet({ item, products, settings, onSave, onClose })
       name: p.name,
       product_id: p.id || null,
       category: p.category || '',
-      unit: p.unit || '',
-      unit_price: p.unit_price,
-      cgst_pct: pctFor(settings, 'cgst', p),
-      sgst_pct: pctFor(settings, 'sgst', p),
-      igst_pct: pctFor(settings, 'igst', p),
     })
   }
 

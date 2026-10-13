@@ -10,7 +10,7 @@ import { orderNo, inr, fmtDate, rangeFor, fyOptions, fyLabel, yearOptions, curre
 const MODES = [['all', 'All time'], ['today', 'Today'], ['month', 'This month'], ['lastmonth', 'Last month'], ['pickmonth', 'Pick a month'], ['year', 'Year'], ['fy', 'Financial year'], ['custom', 'Custom range']]
 
 export default function OrdersPage() {
-  const { settings } = useShop(), toast = useToast(), nav = useNavigate()
+  const { settings, isStaff } = useShop(), toast = useToast(), nav = useNavigate()
   const [sp] = useSearchParams()
   const [mode, setMode] = useState(sp.get('range') || 'all')
   const [v, setV] = useState({ month: new Date().toISOString().slice(0, 7), year: String(new Date().getFullYear()), fy: String(currentFY()), from: '', to: '' })
@@ -53,7 +53,7 @@ export default function OrdersPage() {
   return (
     <div className="page-wide">
       <div className="page-head">
-        <div><h1 className="page-title">Orders</h1><p className="page-subtitle">{loading ? 'Loading…' : `${shown.length} order${shown.length === 1 ? '' : 's'} · revenue ${inr(revenue)} (returned orders excluded)`}</p></div>
+        <div><h1 className="page-title">Orders</h1><p className="page-subtitle">{loading ? 'Loading…' : isStaff ? `${shown.length} order${shown.length === 1 ? '' : 's'}` : `${shown.length} order${shown.length === 1 ? '' : 's'} · revenue ${inr(revenue)} (returned orders excluded)`}</p></div>
         <Link to="/orders/new" className="btn btn-primary">+ New order</Link>
       </div>
 

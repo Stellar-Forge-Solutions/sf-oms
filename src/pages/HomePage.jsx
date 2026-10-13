@@ -7,7 +7,7 @@ import { StageBadge, PayBadge } from '../components/Badges'
 import { inr, orderNo, fmtDate, rangeFor, stageColor, r2 } from '../lib/orderUtils'
 
 export default function HomePage() {
-  const { shop, settings } = useShop(), nav = useNavigate()
+  const { shop, settings, isOwner, isStaff } = useShop(), nav = useNavigate()
   const [period, setPeriod] = useState('month')
   const [rows, setRows] = useState([]), [recent, setRecent] = useState([]), [loading, setLoading] = useState(true)
   const stages = settings.stages
@@ -38,11 +38,13 @@ export default function HomePage() {
         {[['today', 'Today'], ['month', 'This month'], ['all', 'All time']].map(([k, l]) => <button key={k} className={`chip ${period === k ? 'on' : ''}`} onClick={() => setPeriod(k)}>{l}</button>)}
       </div>
 
-      <div className="stats-row">
-        <div className="stat-card"><div className="stat-label">Revenue</div><div className="stat-value teal" style={{ fontSize: '1.15rem' }}>{loading ? '…' : inr(revenue)}</div></div>
-        <div className="stat-card"><div className="stat-label">Collected</div><div className="stat-value" style={{ fontSize: '1.15rem' }}>{loading ? '…' : inr(collected)}</div></div>
-        <div className="stat-card"><div className="stat-label">To collect</div><div className="stat-value" style={{ fontSize: '1.15rem', color: 'var(--warning)' }}>{loading ? '…' : inr(Math.max(0, revenue - collected))}</div></div>
-      </div>
+      {isOwner && (
+        <div className="stats-row">
+          <div className="stat-card"><div className="stat-label">Revenue</div><div className="stat-value teal" style={{ fontSize: '1.15rem' }}>{loading ? '…' : inr(revenue)}</div></div>
+          <div className="stat-card"><div className="stat-label">Collected</div><div className="stat-value" style={{ fontSize: '1.15rem' }}>{loading ? '…' : inr(collected)}</div></div>
+          <div className="stat-card"><div className="stat-label">To collect</div><div className="stat-value" style={{ fontSize: '1.15rem', color: 'var(--warning)' }}>{loading ? '…' : inr(Math.max(0, revenue - collected))}</div></div>
+        </div>
+      )}
 
       <div className="section-title" style={{ marginBottom: 10 }}>Orders by status</div>
       <div className="stage-grid">
@@ -52,13 +54,19 @@ export default function HomePage() {
             <button key={s.key} className={`stage-card ${alert ? 'returned-alert' : ''}`} style={{ '--c': stageColor(s.key) }} onClick={() => nav(`/orders?stage=${s.key}&range=${period}`)}>
               <div className="n" style={alert ? { color: 'var(--danger)' } : {}}>{loading ? '–' : b.n}</div>
               <div className="l">{s.label}</div>
-              <div className="v">{s.key === 'returned' ? (b.n ? `${inr(b.v)} returned` : 'No returned orders') : inr(b.v)}</div>
+              {!isStaff ? (
+                <div className="v">{s.key === 'returned' ? (b.n ? `${inr(b.v)} returned` : 'No returned orders') : inr(b.v)}</div>
+              ) : (
+                <div className="v" style={{ fontSize: '.75rem', opacity: 0.75 }}>{b.n === 1 ? '1 order' : `${b.n} orders`}</div>
+              )}
             </button>)
         })}
       </div>
-      <p className="text-muted" style={{ marginBottom: 20, fontSize: '.78rem' }}>
-        {returnedCount > 0 ? `⚠️ ${returnedCount} returned order${returnedCount > 1 ? 's' : ''} in this period. Returned orders are not counted in revenue.` : 'Returned orders are not counted in revenue.'}
-      </p>
+      {isOwner && (
+        <p className="text-muted" style={{ marginBottom: 20, fontSize: '.78rem' }}>
+          {returnedCount > 0 ? `⚠️ ${returnedCount} returned order${returnedCount > 1 ? 's' : ''} in this period. Returned orders are not counted in revenue.` : 'Returned orders are not counted in revenue.'}
+        </p>
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header"><div className="section-title">Recent orders</div><Link to="/orders" className="btn btn-ghost btn-sm">View all</Link></div>

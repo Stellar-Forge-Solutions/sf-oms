@@ -3,9 +3,9 @@ import { guardWrite } from './shop'
 import { orderNo, stageLabel, PAY, fmtDate, r2 } from './orderUtils'
 
 export function exportRows(orders, settings) {
-  const head = ['Order No', 'Date', 'Customer', 'WhatsApp', 'Email', 'Status', 'Payment', 'Subtotal', 'Tax', 'Freight', 'Total', 'Paid']
+  const head = ['Order No', 'Date', 'Customer', 'WhatsApp', 'Email', 'Status', 'Payment', 'Subtotal', 'Tax', 'Discount', 'Freight', 'Total', 'Paid']
   const body = orders.map(o => [orderNo(o, settings), fmtDate(o.created_at), o.customer_name, o.customer_whatsapp || '', o.customer_email || '',
-    stageLabel(settings.stages, o.stage_key), PAY[o.payment_status].label, r2(o.subtotal), r2(o.tax_total), r2(o.freight), r2(o.total), r2(o.amount_paid)])
+    stageLabel(settings.stages, o.stage_key), PAY[o.payment_status].label, r2(o.subtotal), r2(o.tax_total), r2(o.discount_amount || 0), r2(o.freight), r2(o.total), r2(o.amount_paid)])
   return { head, body }
 }
 
@@ -31,9 +31,9 @@ export async function exportOrders(kind, orders, settings, label = 'orders') {
     doc.setFontSize(14).text(`Orders: ${label}`, 14, 14)
     const sum = (i) => r2(body.reduce((t, r) => t + Number(r[i]), 0))
     autoTable(doc, {
-      startY: 20, head: [['Order', 'Date', 'Customer', 'Status', 'Payment', 'Subtotal', 'Tax', 'Freight', 'Total']],
-      body: body.map(r => [r[0], r[1], r[2], r[5], r[6], r[7], r[8], r[9], r[10]]),
-      foot: [['', '', '', '', `${body.length} orders`, sum(7), sum(8), sum(9), sum(10)]],
+      startY: 20, head: [['Order', 'Date', 'Customer', 'Status', 'Payment', 'Subtotal', 'Tax', 'Discount', 'Freight', 'Total']],
+      body: body.map(r => [r[0], r[1], r[2], r[5], r[6], r[7], r[8], r[9], r[10], r[11]]),
+      foot: [['', '', '', '', `${body.length} orders`, sum(7), sum(8), sum(9), sum(10), sum(11)]],
       headStyles: { fillColor: [15, 25, 35] }, footStyles: { fillColor: [226, 232, 240], textColor: 0 }, styles: { fontSize: 8.5 },
     })
     doc.save(name + '.pdf')
@@ -71,6 +71,37 @@ export async function readProductsFile(file, catLabel) {
       cgst: cg, sgst: sg, igst: ig,
       total_price: r2(price * (1 + ((cg || 0) + (sg || 0) + (ig || 0)) / 100)),   // always recomputed: price + product tax
     })
+  }
+  return { rows, skipped }
+}
+
+// ── Customers: sample + import ─────────────────────────────
+export const customerHeaders = () => ['Customer Name', 'WhatsApp', 'Email', 'Address']
+
+export async function downloadCustomerSample() {
+  const XLSX = await import('xlsx')
+  const ws = XLSX.utils.aoa_to_sheet([customerHeaders(),
+    ['Ravi Kumar', '9876543210', 'ravi@example.com', 'Shop 4, Market Road'],
+    ['Priya Sharma', '9123456780', 'priya@example.com', 'MG Road, Pune']])
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Customers'); XLSX.writeFile(wb, 'customers-sample.xlsx')
+}
+
+// Returns { rows, skipped } ready for order_customers.
+export async function readCustomersFile(file) {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' })
+  const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
+  const rows = []; let skipped = 0
+  for (const r of raw) {
+    const m = {}; for (const k of Object.keys(r)) m[norm(k)] = r[k]
+    const name = String(m.customername ?? m.name ?? m.customer ?? '').trim()
+    if (!name) { skipped++; continue }
+    const rawWa = String(m.whatsapp ?? m.phone ?? m.mobile ?? m.phonenumber ?? m.mobilenumber ?? m.contact ?? '').trim()
+    const rawDigits = rawWa.replace(/\D/g, '')
+    const whatsapp = rawDigits.length === 10 ? rawDigits : rawDigits.length > 10 ? rawDigits.slice(-10) : (rawWa || null)
+    const email = String(m.email ?? m.mail ?? m.emailid ?? '').trim().toLowerCase() || null
+    const address = String(m.address ?? m.city ?? '').trim() || null
+    rows.push({ name, whatsapp, email, address })
   }
   return { rows, skipped }
 }

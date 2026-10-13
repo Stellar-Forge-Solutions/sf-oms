@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useShop } from '../lib/ShopContext'
@@ -6,7 +6,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../components/Toast'
 import PlanCard from '../components/PlanCard'
 import { logoUrl } from '../lib/shop'
-import { contactUrl } from '../lib/plans'
+import { contactUrl, upgradeUrl } from '../lib/plans'
 import { CORE_KEYS, MAX_EXTRA_STAGES, normStages } from '../lib/orderUtils'
 
 const SHOP_KEYS = ['name', 'tagline', 'address', 'mobile', 'whatsapp', 'gst_no', 'website', 'thank_you']
@@ -23,7 +23,9 @@ function resizeLogo(file, max = 400) {
 }
 
 export default function SettingsPage() {
-  const { shop, settings, canWrite, isPro, hasExpense, reload } = useShop(), { user } = useAuth(), toast = useToast()
+  const { shop, settings, canWrite, isPro, isPaidPro, hasExpense, isOwner, isStaff, role, reload } = useShop()
+  const { user } = useAuth()
+  const toast = useToast()
   const [sf, setSf] = useState(() => Object.fromEntries(SHOP_KEYS.map(k => [k, shop?.[k] ?? ''])))
   const [paper, setPaper] = useState(shop?.paper_width || 58)
   const [s, setS] = useState(() => ({
@@ -34,6 +36,81 @@ export default function SettingsPage() {
   const [core, setCore] = useState(() => Object.fromEntries(settings.stages.filter(x => CORE_KEYS.includes(x.key)).map(x => [x.key, x.label])))
   const [extras, setExtras] = useState(() => settings.stages.filter(x => !CORE_KEYS.includes(x.key)))
   const [busy, setBusy] = useState(false)
+
+  // Staff management state
+  const [staffList, setStaffList] = useState([])
+  const [staffLoading, setStaffLoading] = useState(false)
+  const [showAddStaff, setShowAddStaff] = useState(false)
+  const [newStaff, setNewStaff] = useState({ name: '', email: '', password: '' })
+  const [staffErr, setStaffErr] = useState('')
+  const [staffBusy, setStaffBusy] = useState(false)
+
+  const loadStaff = async () => {
+    if (!isOwner || !shop) return
+    setStaffLoading(true)
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token
+      const res = await fetch('/api/staff', { headers: { Authorization: `Bearer ${token}` } })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.staff) { setStaffList(data.staff); setStaffLoading(false); return }
+      }
+      const { data } = await supabase.from('shop_staff').select('id, name, email, role, created_at').eq('shop_id', shop.id).order('created_at')
+      setStaffList(data || [])
+    } catch {
+      try {
+        const { data } = await supabase.from('shop_staff').select('id, name, email, role, created_at').eq('shop_id', shop.id).order('created_at')
+        setStaffList(data || [])
+      } catch {}
+    } finally {
+      setStaffLoading(false)
+    }
+  }
+
+  useEffect(() => { loadStaff() }, [isOwner, shop?.id])
+
+  const addStaff = async () => {
+    setStaffErr('')
+    if (!newStaff.name.trim()) return setStaffErr('Staff name is required')
+    if (!newStaff.email.trim()) return setStaffErr('Staff email is required')
+    if (newStaff.password.length < 6) return setStaffErr('Password must be at least 6 characters')
+    setStaffBusy(true)
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token
+      const res = await fetch('/api/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(newStaff),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to add staff')
+      toast('Staff member added')
+      setShowAddStaff(false)
+      setNewStaff({ name: '', email: '', password: '' })
+      loadStaff()
+    } catch (e) {
+      setStaffErr(e.message)
+    } finally {
+      setStaffBusy(false)
+    }
+  }
+
+  const removeStaff = async (id, name) => {
+    if (!confirm(`Remove staff access for “${name}”? They will no longer be able to log in.`)) return
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token
+      const res = await fetch(`/api/staff?id=${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to remove staff')
+      toast('Staff removed')
+      loadStaff()
+    } catch (e) {
+      toast(e.message, 'error')
+    }
+  }
 
   const setShop = (k) => (e) => setSf({ ...sf, [k]: e.target.value })
   const inp = (label, k, props = {}) => <div className="form-group"><label className="form-label">{label}</label><input className="form-input" value={sf[k]} onChange={setShop(k)} {...props} /></div>
@@ -94,74 +171,213 @@ export default function SettingsPage() {
     <div className="page">
       <h1 className="page-title">Settings</h1>
       <p className="page-subtitle" style={{ marginBottom: 16 }}>Changes apply to new orders and messages.</p>
-      <PlanCard />
+
+      {isStaff && (
+        <div className="hint-box" style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#166534', borderStyle: 'solid', marginBottom: 16 }}>
+          <b>👤 Staff Account</b>
+          <div style={{ marginTop: 4, fontSize: '0.82rem' }}>You are logged in as a staff member for <b>{shop?.name}</b>. Shop profile, billing plans, and settings are managed by the shop owner ({shop?.owner_name || ''}).</div>
+        </div>
+      )}
+
+      {isOwner && !isPaidPro && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="card-header" style={{ marginBottom: 8 }}>
+            <div>
+              <div className="section-title">Staff Accounts</div>
+              <div className="text-muted" style={{ fontSize: '.78rem' }}>1 Owner (You) + up to 2 Staff logins for taking orders</div>
+            </div>
+            <span className="badge badge-accent">PRO</span>
+          </div>
+          <div className="empty-state" style={{ padding: '16px 12px' }}>
+            <div className="empty-state-text" style={{ marginBottom: 12 }}>
+              Staff accounts are an exclusive Pro feature (available on paid Pro plan). Add up to 2 team members to take orders without sharing your owner credentials.
+            </div>
+            <a
+              className="btn btn-primary btn-sm"
+              href={upgradeUrl(shop, user, false, 'pro')}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: 'none', display: 'inline-block' }}
+            >
+              ⭐ Upgrade to Pro to add staff
+            </a>
+          </div>
+        </div>
+      )}
+
+      {isOwner && isPaidPro && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="card-header" style={{ marginBottom: 8 }}>
+            <div>
+              <div className="section-title">Staff Accounts</div>
+              <div className="text-muted" style={{ fontSize: '.78rem' }}>1 Owner (You) + up to 2 Staff logins for taking orders</div>
+            </div>
+            <span className="badge" style={{ background: staffList.length >= 2 ? '#fee2e2' : 'var(--teal-glow)', color: staffList.length >= 2 ? '#991b1b' : 'var(--teal-dark)' }}>
+              {staffList.length} / 2 Staff added
+            </span>
+          </div>
+
+          {staffLoading && <div className="text-muted" style={{ fontSize: '.85rem' }}>Loading staff…</div>}
+
+          {!staffLoading && !staffList.length && (
+            <div className="empty-state" style={{ padding: '16px 12px' }}>
+              <div className="empty-state-text">No staff accounts added yet. You can add up to 2 staff members.</div>
+            </div>
+          )}
+
+          {staffList.map(st => (
+            <div className="item-row" key={st.id}>
+              <div>
+                <b>{st.name}</b>
+                <div className="text-muted" style={{ fontSize: '.78rem' }}>{st.email} · Staff login</div>
+              </div>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ color: 'var(--danger)' }}
+                onClick={() => removeStaff(st.id, st.name)}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+
+          <div style={{ marginTop: 14 }}>
+            {staffList.length < 2 ? (
+              <button className="btn btn-secondary btn-sm" onClick={() => { setStaffErr(''); setShowAddStaff(true) }}>
+                + Add staff member
+              </button>
+            ) : (
+              <div className="text-muted" style={{ fontSize: '.78rem' }}>
+                Maximum staff limit reached (2 of 2 slots used). Remove a staff member to add another.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isOwner && <PlanCard />}
 
       <div className="card">
         <H>Shop details</H>
-        {inp('Shop name', 'name')}{inp('Second line (tagline)', 'tagline')}{inp('Address', 'address')}
-        <div className="grid2">{inp('Mobile', 'mobile', { inputMode: 'numeric' })}{inp('WhatsApp', 'whatsapp', { inputMode: 'numeric' })}</div>
-        <div className="grid2">{inp('GST number (optional)', 'gst_no')}{inp('Website (optional)', 'website')}</div>
-        {inp('Thank-you text (bill and messages)', 'thank_you')}
+        {inp('Shop name', 'name', { disabled: isStaff })}{inp('Second line (tagline)', 'tagline', { disabled: isStaff })}{inp('Address', 'address', { disabled: isStaff })}
+        <div className="grid2">{inp('Mobile', 'mobile', { inputMode: 'numeric', disabled: isStaff })}{inp('WhatsApp', 'whatsapp', { inputMode: 'numeric', disabled: isStaff })}</div>
+        <div className="grid2">{inp('GST number (optional)', 'gst_no', { disabled: isStaff })}{inp('Website (optional)', 'website', { disabled: isStaff })}</div>
+        {inp('Thank-you text (bill and messages)', 'thank_you', { disabled: isStaff })}
         <div className="form-group"><label className="form-label">Logo (bill, tracking page, email)</label>
           {logo && <img src={logo} alt="" style={{ height: 60, display: 'block', marginBottom: 8 }} />}
-          <input type="file" accept="image/*" onChange={upload} disabled={!canWrite} /></div>
+          <input type="file" accept="image/*" onChange={upload} disabled={!canWrite || isStaff} /></div>
 
         <H sub="Rename them to suit your shop (for example: Order placed, Packing, Out for delivery). You can add up to 2 more stages between Processing and Ready.">Order statuses</H>
-        {[['received', '1'], ['processing', '2']].map(([k, n]) => <div className="form-group" key={k}><label className="form-label">Status {n}</label><input className="form-input" maxLength={30} value={core[k]} onChange={e => setCore({ ...core, [k]: e.target.value })} /></div>)}
+        {[['received', '1'], ['processing', '2']].map(([k, n]) => <div className="form-group" key={k}><label className="form-label">Status {n}</label><input className="form-input" maxLength={30} value={core[k]} onChange={e => setCore({ ...core, [k]: e.target.value })} disabled={isStaff} /></div>)}
         {extras.map((x, i) => (
           <div className="form-group" key={x.key}><label className="form-label">Extra status {i + 1}</label>
-            <div className="flex gap-2"><input className="form-input" maxLength={30} placeholder="e.g. Packing" value={x.label} onChange={e => setExtras(extras.map(y => y.key === x.key ? { ...y, label: e.target.value } : y))} />
-              <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={() => confirm('Remove this status? Orders in it move back to Processing.') && setExtras(extras.filter(y => y.key !== x.key))}>✕</button></div></div>))}
-        {extras.length < MAX_EXTRA_STAGES && <button className="btn btn-secondary btn-sm" style={{ marginBottom: 12 }} onClick={addExtra}>+ Add a status after Processing</button>}
-        {[['ready', '3'], ['delivered', '4'], ['returned', '5']].map(([k, n]) => <div className="form-group" key={k}><label className="form-label">Status {n + (extras.length ? ` (+${extras.length})` : '')}</label><input className="form-input" maxLength={30} value={core[k]} onChange={e => setCore({ ...core, [k]: e.target.value })} /></div>)}
+            <div className="flex gap-2"><input className="form-input" maxLength={30} placeholder="e.g. Packing" value={x.label} onChange={e => setExtras(extras.map(y => y.key === x.key ? { ...y, label: e.target.value } : y))} disabled={isStaff} />
+              {!isStaff && <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={() => confirm('Remove this status? Orders in it move back to Processing.') && setExtras(extras.filter(y => y.key !== x.key))}>✕</button>}</div></div>))}
+        {extras.length < MAX_EXTRA_STAGES && !isStaff && <button className="btn btn-secondary btn-sm" style={{ marginBottom: 12 }} onClick={addExtra}>+ Add a status after Processing</button>}
+        {[['ready', '3'], ['delivered', '4'], ['returned', '5']].map(([k, n]) => <div className="form-group" key={k}><label className="form-label">Status {n + (extras.length ? ` (+${extras.length})` : '')}</label><input className="form-input" maxLength={30} value={core[k]} onChange={e => setCore({ ...core, [k]: e.target.value })} disabled={isStaff} /></div>)}
 
         <H>Names</H>
         <div className="grid2">
-          <div className="form-group"><label className="form-label">What do you call “Category”?</label><input className="form-input" maxLength={24} placeholder="Masala, Car Type…" value={s.category_label} onChange={e => setS({ ...s, category_label: e.target.value })} /></div>
-          <div className="form-group"><label className="form-label">Order number prefix</label><input className="form-input" maxLength={8} value={s.order_prefix} onChange={e => setS({ ...s, order_prefix: e.target.value })} /></div>
+          <div className="form-group"><label className="form-label">What do you call “Category”?</label><input className="form-input" maxLength={24} placeholder="Masala, Car Type…" value={s.category_label} onChange={e => setS({ ...s, category_label: e.target.value })} disabled={isStaff} /></div>
+          <div className="form-group"><label className="form-label">Order number prefix</label><input className="form-input" maxLength={8} value={s.order_prefix} onChange={e => setS({ ...s, order_prefix: e.target.value })} disabled={isStaff} /></div>
         </div>
 
         <H sub="Untick what you do not need. They disappear from the new-order screen.">Fields on the new-order page</H>
-        {FIELD_LABELS.map(([k, l]) => <label className="toggle-row" key={k}><input type="checkbox" checked={!!s.fields[k]} onChange={() => toggleField(k)} />{k === 'category' ? s.category_label || l : l}</label>)}
+        {FIELD_LABELS.map(([k, l]) => <label className="toggle-row" key={k}><input type="checkbox" checked={!!s.fields[k]} onChange={() => toggleField(k)} disabled={isStaff} />{k === 'category' ? s.category_label || l : l}</label>)}
         {s.fields.tax && <div className="hint-box mt-3" style={{ borderStyle: 'solid' }}>
           <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>Which taxes do you charge, and at what percent?</div>
           {['cgst', 'sgst', 'igst'].map(k => (
             <div className="toggle-row" key={k} style={{ borderBottom: 0 }}>
-              <input type="checkbox" checked={s.tax[k].on} onChange={e => setTax(k, { on: e.target.checked })} /><span style={{ width: 52, fontWeight: 600 }}>{k.toUpperCase()}</span>
-              <input className="form-input" style={{ maxWidth: 110, padding: '8px 10px' }} type="number" inputMode="decimal" min="0" max="100" step="any" disabled={!s.tax[k].on} value={s.tax[k].pct} onChange={e => setTax(k, { pct: e.target.value })} /><span>%</span>
+              <input type="checkbox" checked={s.tax[k].on} onChange={e => setTax(k, { on: e.target.checked })} disabled={isStaff} /><span style={{ width: 52, fontWeight: 600 }}>{k.toUpperCase()}</span>
+              <input className="form-input" style={{ maxWidth: 110, padding: '8px 10px' }} type="number" inputMode="decimal" min="0" max="100" step="any" disabled={!s.tax[k].on || isStaff} value={s.tax[k].pct} onChange={e => setTax(k, { pct: e.target.value })} /><span>%</span>
             </div>))}
           <div style={{ fontSize: '.75rem', marginTop: 6 }}>Prices are taken as tax-exclusive; tax is added on top. A product’s own % (from Excel) overrides these.</div>
         </div>}
 
         <H sub="After you change an order's status you get a pop-up to send the update.">Customer notification</H>
-        <div className="seg">{[['whatsapp', 'WhatsApp'], ['email', 'Email'], ['both', 'Both']].map(([k, l]) => <button key={k} className={s.notify_channel === k ? 'on' : ''} onClick={() => setS({ ...s, notify_channel: k })}>{l}</button>)}</div>
+        <div className="seg">{[['whatsapp', 'WhatsApp'], ['email', 'Email'], ['both', 'Both']].map(([k, l]) => <button key={k} className={s.notify_channel === k ? 'on' : ''} onClick={() => !isStaff && setS({ ...s, notify_channel: k })} disabled={isStaff}>{l}</button>)}</div>
 
         <H sub="Choose how the Print buttons behave by default. Both options are always on the order page.">Printing</H>
-        <div className="seg" style={{ marginBottom: 12 }}>{[['thermal', 'Thermal printer'], ['normal', 'Normal printer']].map(([k, l]) => <button key={k} className={s.printer_mode === k ? 'on' : ''} onClick={() => setS({ ...s, printer_mode: k })}>{l}</button>)}</div>
+        <div className="seg" style={{ marginBottom: 12 }}>{[['thermal', 'Thermal printer'], ['normal', 'Normal printer']].map(([k, l]) => <button key={k} className={s.printer_mode === k ? 'on' : ''} onClick={() => !isStaff && setS({ ...s, printer_mode: k })} disabled={isStaff}>{l}</button>)}</div>
         <div className="form-group"><label className="form-label">Thermal printer paper</label>
-          <select className="form-input" value={paper} onChange={e => setPaper(e.target.value)}><option value={58}>2 inch (58 mm)</option><option value={80}>3 inch (80 mm)</option></select></div>
+          <select className="form-input" value={paper} onChange={e => setPaper(e.target.value)} disabled={isStaff}><option value={58}>2 inch (58 mm)</option><option value={80}>3 inch (80 mm)</option></select></div>
         <Link to="/connect-printer" className="btn btn-secondary btn-sm">🖨️ How to connect a thermal printer</Link>
 
-        {hasExpense && <>
+        {hasExpense && isOwner && <>
           <H sub="Each day, the value of orders marked Delivered is added to your Expense Tracker as one sale. Returned orders are taken out again.">Expense Tracker</H>
           <label className="toggle-row"><input type="checkbox" checked={!!shop.sync_orders_sales} disabled={!canWrite} onChange={e => toggleSync(e.target.checked)} />Send delivered orders to Expense Tracker as sales</label>
         </>}
 
-        <H>Pro features{!isPro && <span className="pro-tag">PRO</span>}</H>
-        <div className={isPro ? '' : 'lock'}>
-          <div className="form-group"><label className="form-label">Custom URL for tracking links</label><input className="form-input" placeholder="https://orders.yourshop.com" value={s.custom_url} onChange={e => setS({ ...s, custom_url: e.target.value })} /></div>
-          <div className="form-group"><label className="form-label">Brand colour (tracking page, email)</label>
-            <div className="flex gap-2"><input type="color" value={s.brand_color || '#00c9a7'} onChange={e => setS({ ...s, brand_color: e.target.value })} style={{ width: 52, height: 44, border: '1.5px solid var(--border)', borderRadius: 8 }} /><input className="form-input" placeholder="#00c9a7" value={s.brand_color} onChange={e => setS({ ...s, brand_color: e.target.value })} /></div></div>
-          <label className="toggle-row"><input type="checkbox" checked={s.hide_powered} onChange={e => setS({ ...s, hide_powered: e.target.checked })} />Hide “Powered by Stellar Forge”</label>
-        </div>
-        <div className="flex gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
-          {!isPro && <a className="btn btn-dark btn-sm" target="_blank" rel="noopener noreferrer" href={contactUrl('Orders Pro plan', shop, user)}>⭐ Upgrade to Pro</a>}
-          <a className="btn btn-secondary btn-sm" target="_blank" rel="noopener noreferrer" href={contactUrl('multiple logins for my team (Orders Pro)', shop, user)}>👥 Multiple logins: contact us</a>
-          <a className="btn btn-secondary btn-sm" target="_blank" rel="noopener noreferrer" href={contactUrl('dedicated infrastructure (Orders Pro)', shop, user)}>🏗️ Dedicated infra: contact us</a>
-        </div>
+        {isOwner && <>
+          <H>Pro features{!isPro && <span className="pro-tag">PRO</span>}</H>
+          <div className={isPro ? '' : 'lock'}>
+            <div className="form-group"><label className="form-label">Custom URL for tracking links</label><input className="form-input" placeholder="https://orders.yourshop.com" value={s.custom_url} onChange={e => setS({ ...s, custom_url: e.target.value })} /></div>
+            <div className="form-group"><label className="form-label">Brand colour (tracking page, email)</label>
+              <div className="flex gap-2"><input type="color" value={s.brand_color || '#00c9a7'} onChange={e => setS({ ...s, brand_color: e.target.value })} style={{ width: 52, height: 44, border: '1.5px solid var(--border)', borderRadius: 8 }} /><input className="form-input" placeholder="#00c9a7" value={s.brand_color} onChange={e => setS({ ...s, brand_color: e.target.value })} /></div></div>
+            <label className="toggle-row"><input type="checkbox" checked={s.hide_powered} onChange={e => setS({ ...s, hide_powered: e.target.checked })} />Hide “Powered by Stellar Forge”</label>
+          </div>
+          <div className="flex gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
+            {!isPro && <a className="btn btn-dark btn-sm" target="_blank" rel="noopener noreferrer" href={contactUrl('Orders Pro plan', shop, user)}>⭐ Upgrade to Pro</a>}
+            <a className="btn btn-secondary btn-sm" target="_blank" rel="noopener noreferrer" href={contactUrl('dedicated infrastructure (Orders Pro)', shop, user)}>🏗️ Dedicated infra: contact us</a>
+          </div>
+        </>}
 
-        <button className="btn btn-primary btn-full btn-lg" style={{ marginTop: 24 }} onClick={save} disabled={busy || !canWrite}>{busy ? 'Saving…' : 'Save settings'}</button>
+        {!isStaff && (
+          <button className="btn btn-primary btn-full btn-lg" style={{ marginTop: 24 }} onClick={save} disabled={busy || !canWrite}>{busy ? 'Saving…' : 'Save settings'}</button>
+        )}
       </div>
+
+      {showAddStaff && (
+        <div className="modal-overlay" onClick={() => setShowAddStaff(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">Add Staff Member</div>
+            <div className="modal-subtitle">Create a login for your counter staff or helper (Slot {staffList.length + 1} of 2).</div>
+
+            <div className="form-group">
+              <label className="form-label">Staff Name *</label>
+              <input
+                className="form-input"
+                placeholder="e.g. Rahul"
+                value={newStaff.name}
+                onChange={e => setNewStaff({ ...newStaff, name: e.target.value })}
+                autoFocus
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Email *</label>
+              <input
+                className="form-input"
+                type="email"
+                placeholder="e.g. rahul@shop.com"
+                value={newStaff.email}
+                onChange={e => setNewStaff({ ...newStaff, email: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Set Password *</label>
+              <input
+                className="form-input"
+                type="password"
+                placeholder="At least 6 characters"
+                value={newStaff.password}
+                onChange={e => setNewStaff({ ...newStaff, password: e.target.value })}
+              />
+              <div className="text-muted" style={{ fontSize: '.72rem', marginTop: 4 }}>
+                Your staff will use this email and password to log in.
+              </div>
+            </div>
+
+            {staffErr && <div className="err-text">✕ {staffErr}</div>}
+
+            <div className="flex gap-2 mt-3">
+              <button className="btn btn-ghost" onClick={() => setShowAddStaff(false)}>Cancel</button>
+              <button className="btn btn-primary" style={{ flex: 1 }} disabled={staffBusy} onClick={addStaff}>
+                {staffBusy ? 'Adding…' : 'Create Staff Login'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

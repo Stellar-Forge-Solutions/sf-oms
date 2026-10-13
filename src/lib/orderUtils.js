@@ -58,8 +58,14 @@ export function mergeSettings(row) {
 
 // ── Money / tax ───────────────────────────────────────────
 export const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
-export const inr = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-export const rs = (n) => 'Rs. ' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+export const inr = (n) => {
+  const num = Number(n || 0)
+  return (num < 0 ? '- ₹' : '₹') + Math.abs(num).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+export const rs = (n) => {
+  const num = Number(n || 0)
+  return (num < 0 ? '- Rs. ' : 'Rs. ') + Math.abs(num).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
 
 export const taxActive = (settings) => !!settings.fields.tax && ['cgst', 'sgst', 'igst'].some(k => settings.tax[k].on)
 
@@ -76,13 +82,19 @@ export function calcLine(it) {
   const c = r2(base * Number(it.cgst_pct || 0) / 100), s = r2(base * Number(it.sgst_pct || 0) / 100), i = r2(base * Number(it.igst_pct || 0) / 100)
   return { base, cgst: c, sgst: s, igst: i, tax: r2(c + s + i), total: r2(base + c + s + i) }
 }
-export function calcOrder(items, freight = 0) {
+export function calcOrder(items, freight = 0, discountAmt = 0) {
   const t = { subtotal: 0, cgst: 0, sgst: 0, igst: 0 }
   for (const it of items) { const l = calcLine(it); t.subtotal += l.base; t.cgst += l.cgst; t.sgst += l.sgst; t.igst += l.igst }
   const tax = r2(t.cgst + t.sgst + t.igst), f = r2(freight)
-  return { subtotal: r2(t.subtotal), cgst: r2(t.cgst), sgst: r2(t.sgst), igst: r2(t.igst), tax, freight: f, total: r2(t.subtotal + tax + f) }
+  const d = Math.min(Math.max(0, r2(discountAmt)), r2(t.subtotal + tax))
+  const total = Math.max(0, r2(t.subtotal + tax - d + f))
+  return { subtotal: r2(t.subtotal), cgst: r2(t.cgst), sgst: r2(t.sgst), igst: r2(t.igst), tax, discount: d, freight: f, total }
 }
-export const orderRowTotals = (t) => ({ subtotal: t.subtotal, cgst_amt: t.cgst, sgst_amt: t.sgst, igst_amt: t.igst, tax_total: t.tax, freight: t.freight, total: t.total })
+export const orderRowTotals = (t, discount_percent = 0) => ({
+  subtotal: t.subtotal, cgst_amt: t.cgst, sgst_amt: t.sgst, igst_amt: t.igst,
+  tax_total: t.tax, freight: t.freight, total: t.total,
+  discount_amount: t.discount || 0, discount_percent: Number(discount_percent) || 0,
+})
 export const itemRow = (it) => { const l = calcLine(it); return { quantity: Number(it.quantity), unit_price: Number(it.unit_price), tax_amt: l.tax, line_total: l.base } }
 
 // ── Names, phone numbers, links ───────────────────────────

@@ -8,14 +8,33 @@ export default function ItemSheet({ item, products, settings, onSave, onClose })
   const [err, setErr] = useState('')
   const set = (k) => (e) => setIt({ ...it, [k]: e.target.value })
 
+  const selectProduct = (p) => {
+    setIt({
+      ...it,
+      name: p.name,
+      product_id: p.id || null,
+      category: p.category || '',
+      unit: p.unit || '',
+      unit_price: p.unit_price,
+      cgst_pct: pctFor(settings, 'cgst', p),
+      sgst_pct: pctFor(settings, 'sgst', p),
+      igst_pct: pctFor(settings, 'igst', p),
+    })
+  }
+
   const pick = (e) => {
     const name = e.target.value
     const p = products.find(x => x.name.toLowerCase() === name.trim().toLowerCase())
     if (!p) return setIt({ ...it, name, product_id: null })
-    setIt({ ...it, name: p.name, product_id: p.id, category: p.category || '', unit: p.unit || '', unit_price: p.unit_price,
-      cgst_pct: pctFor(settings, 'cgst', p), sgst_pct: pctFor(settings, 'sgst', p), igst_pct: pctFor(settings, 'igst', p) })
+    selectProduct(p)
   }
   const line = calcLine({ ...it, quantity: Number(it.quantity) || 0, unit_price: Number(it.unit_price) || 0 })
+
+  const prodQuery = (it.name || '').trim().toLowerCase()
+  const productSuggestions = (prodQuery
+    ? products.filter(p => p.name.toLowerCase().includes(prodQuery))
+    : products
+  ).slice(0, 8)
 
   const save = () => {
     if (!it.name.trim()) return setErr('Enter the item name')
@@ -31,9 +50,29 @@ export default function ItemSheet({ item, products, settings, onSave, onClose })
         <div className="modal-title">{item ? 'Edit item' : 'Add item'}</div>
         <div className="modal-subtitle">Pick a saved product or type a new one.</div>
 
-        <div className="form-group"><label className="form-label">Item name</label>
-          <input className="form-input" list="prod-list" value={it.name} onChange={pick} placeholder="Start typing…" autoFocus />
-          <datalist id="prod-list">{products.map(p => <option key={p.id} value={p.name} />)}</datalist></div>
+        <div className="form-group">
+          <label className="form-label">Item name</label>
+          <input className="form-input" list="prod-list" value={it.name} onChange={pick} placeholder="Type or pick an item" autoFocus />
+          <datalist id="prod-list">{products.map(p => <option key={p.id} value={p.name} />)}</datalist>
+
+          {productSuggestions.length > 0 && (
+            <div className="suggestion-wrap">
+              <div className="suggestion-label">{prodQuery ? 'Matching items' : 'Frequent items'}</div>
+              <div className="suggestion-pills">
+                {productSuggestions.map(p => (
+                  <button
+                    key={p.id || p.name}
+                    type="button"
+                    className="suggestion-pill"
+                    onClick={() => selectProduct(p)}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {f.category && <div className="form-group"><label className="form-label">{settings.category_label}</label><input className="form-input" value={it.category || ''} onChange={set('category')} /></div>}
         {f.description && <div className="form-group"><label className="form-label">Description</label><input className="form-input" value={it.description || ''} onChange={set('description')} /></div>}

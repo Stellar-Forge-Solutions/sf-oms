@@ -158,6 +158,12 @@ export default function OrderDetail() {
             {Number(o.cgst_amt) > 0 && <div className="tot-row"><span>CGST</span><span>{inr(o.cgst_amt)}</span></div>}
             {Number(o.sgst_amt) > 0 && <div className="tot-row"><span>SGST</span><span>{inr(o.sgst_amt)}</span></div>}
             {Number(o.igst_amt) > 0 && <div className="tot-row"><span>IGST</span><span>{inr(o.igst_amt)}</span></div>}
+            {Number(o.discount_amount) > 0 && (
+              <div className="tot-row" style={{ color: 'var(--success)', fontWeight: 600 }}>
+                <span>Discount{Number(o.discount_percent) > 0 ? ` (${Number(o.discount_percent)}%)` : ''}</span>
+                <span>- {inr(o.discount_amount)}</span>
+              </div>
+            )}
             {Number(o.freight) > 0 && <div className="tot-row"><span>Freight / delivery</span><span>{inr(o.freight)}</span></div>}
             <div className="tot-row grand"><span>Total</span><span>{inr(o.total)}</span></div>
             {o.notes && <div className="hint-box mt-3" style={{ marginBottom: 0 }}>📝 {o.notes}</div>}

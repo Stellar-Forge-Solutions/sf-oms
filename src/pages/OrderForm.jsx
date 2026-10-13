@@ -17,14 +17,40 @@ export default function OrderForm() {
   const [c, setC] = useState({ name: '', whatsapp: '', email: '' })
   const [items, setItems] = useState([])
   const [freight, setFreight] = useState('')
+  const [discountPct, setDiscountPct] = useState('')
+  const [discountAmt, setDiscountAmt] = useState('')
+  const [discountMode, setDiscountMode] = useState('pct')
   const [notes, setNotes] = useState('')
   const [pay, setPay] = useState('unpaid'), [paid, setPaid] = useState('')
   const [products, setProducts] = useState([])
+  const [customers, setCustomers] = useState([])
   const [sheet, setSheet] = useState(null)       // null | { index, item }
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(!!id), [err, setErr] = useState('')
 
   useEffect(() => {
     supabase.from('order_products').select('*').order('name').limit(1000).then(({ data }) => setProducts(data || []))
+
+    ;(async () => {
+      const custMap = new Map()
+      try {
+        const { data: cData } = await supabase.from('order_customers').select('*').order('name').limit(1000)
+        ;(cData || []).forEach(x => {
+          const k = (x.name || '').trim().toLowerCase()
+          if (k) custMap.set(k, x)
+        })
+      } catch {}
+      try {
+        const { data: oData } = await supabase.from('orders').select('customer_name, customer_whatsapp, customer_email').order('created_at', { ascending: false }).limit(200)
+        ;(oData || []).forEach(o => {
+          const k = (o.customer_name || '').trim().toLowerCase()
+          if (k && !custMap.has(k)) {
+            custMap.set(k, { name: o.customer_name.trim(), whatsapp: o.customer_whatsapp || '', email: o.customer_email || '' })
+          }
+        })
+      } catch {}
+      setCustomers([...custMap.values()])
+    })()
+
     if (!id) return
     ;(async () => {
       const [{ data: o }, { data: its }] = await Promise.all([
@@ -34,13 +60,63 @@ export default function OrderForm() {
       if (!o) return nav('/orders', { replace: true })
       setC({ name: o.customer_name, whatsapp: o.customer_whatsapp || '', email: o.customer_email || '' })
       setItems((its || []).map(i => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })))
-      setFreight(Number(o.freight) ? String(o.freight) : ''); setNotes(o.notes || ''); setPay(o.payment_status); setPaid(Number(o.amount_paid) ? String(o.amount_paid) : '')
+      setFreight(Number(o.freight) ? String(o.freight) : '')
+      setDiscountPct(Number(o.discount_percent) ? String(o.discount_percent) : '')
+      setDiscountAmt(Number(o.discount_amount) ? String(o.discount_amount) : '')
+      setNotes(o.notes || ''); setPay(o.payment_status); setPaid(Number(o.amount_paid) ? String(o.amount_paid) : '')
       setLoading(false)
     })()
   }, [id])
 
-  const totals = calcOrder(items, f.freight ? Number(freight) || 0 : 0)
-  const setItem = (it) => { setItems(list => sheet.index === null ? [...list, it] : list.map((x, i) => i === sheet.index ? it : x)); setSheet(null) }
+  const preDiscountTotal = r2(items.reduce((acc, it) => acc + calcLine(it).total, 0))
+
+  const handlePctChange = (val) => {
+    setDiscountMode('pct')
+    setDiscountPct(val)
+    if (val === '' || isNaN(Number(val)) || Number(val) === 0) {
+      setDiscountAmt('')
+      return
+    }
+    const pct = Math.min(100, Math.max(0, Number(val)))
+    const amt = r2((preDiscountTotal * pct) / 100)
+    setDiscountAmt(amt > 0 ? String(amt) : '')
+  }
+
+  const handleAmtChange = (val) => {
+    setDiscountMode('amt')
+    setDiscountAmt(val)
+    if (val === '' || isNaN(Number(val)) || Number(val) === 0) {
+      setDiscountPct('')
+      return
+    }
+    const amt = Math.max(0, Number(val))
+    const pct = preDiscountTotal > 0 ? r2((amt / preDiscountTotal) * 100) : 0
+    setDiscountPct(pct > 0 ? String(pct) : '')
+  }
+
+  useEffect(() => {
+    if (discountMode === 'pct' && discountPct && Number(discountPct) > 0) {
+      const pct = Math.min(100, Math.max(0, Number(discountPct)))
+      const amt = r2((preDiscountTotal * pct) / 100)
+      setDiscountAmt(amt > 0 ? String(amt) : '')
+    } else if (discountMode === 'amt' && discountAmt && Number(discountAmt) > 0) {
+      const amt = Math.max(0, Number(discountAmt))
+      const pct = preDiscountTotal > 0 ? r2((amt / preDiscountTotal) * 100) : 0
+      setDiscountPct(pct > 0 ? String(pct) : '')
+    }
+  }, [items])
+
+  const totals = calcOrder(items, f.freight ? Number(freight) || 0 : 0, Number(discountAmt) || 0)
+  const setItem = (it) => {
+    setItems(list => sheet.index === null ? [...list, it] : list.map((x, i) => i === sheet.index ? it : x))
+    setSheet(null)
+    if (it.name?.trim()) {
+      setProducts(prev => {
+        if (prev.some(p => p.name.toLowerCase() === it.name.trim().toLowerCase())) return prev
+        return [...prev, { name: it.name.trim(), category: it.category || null, unit: it.unit || null, unit_price: it.unit_price }]
+      })
+    }
+  }
 
   const save = async () => {
     setErr('')
@@ -52,19 +128,31 @@ export default function OrderForm() {
     if (!guardWrite('Saving orders')) return
     setBusy(true)
 
+    const effPct = Number(discountPct) || 0
+    const effAmt = totals.discount || 0
     const row = {
       customer_name: c.name.trim(), customer_whatsapp: c.whatsapp ? digits10(c.whatsapp) : null, customer_email: c.email.trim().toLowerCase() || null,
       payment_status: pay, amount_paid: pay === 'paid' ? totals.total : pay === 'partial' ? Number(paid) : 0,
-      notes: f.notes ? notes.trim() || null : null, ...orderRowTotals(totals), updated_at: new Date().toISOString(),
+      notes: f.notes ? notes.trim() || null : null, discount_percent: effPct, discount_amount: effAmt,
+      ...orderRowTotals(totals, effPct), updated_at: new Date().toISOString(),
     }
     let orderId = id
     if (id) {
-      const { error } = await supabase.from('orders').update(row).eq('id', id)
+      let { error } = await supabase.from('orders').update(row).eq('id', id)
+      if (error && (error.message?.includes('discount_percent') || error.message?.includes('discount_amount'))) {
+        const fallback = { ...row }; delete fallback.discount_percent; delete fallback.discount_amount
+        error = (await supabase.from('orders').update(fallback).eq('id', id)).error
+      }
       if (error) { setBusy(false); return setErr(error.message) }
       await supabase.from('order_items').delete().eq('order_id', id)
     } else {
       const first = settings.stages[0]
-      const { data, error } = await supabase.from('orders').insert({ ...row, shop_id: shop.id, stage_key: first.key, created_by: user.email }).select().single()
+      let { data, error } = await supabase.from('orders').insert({ ...row, shop_id: shop.id, stage_key: first.key, created_by: user.email }).select().single()
+      if (error && (error.message?.includes('discount_percent') || error.message?.includes('discount_amount'))) {
+        const fallback = { ...row }; delete fallback.discount_percent; delete fallback.discount_amount
+        const res = await supabase.from('orders').insert({ ...fallback, shop_id: shop.id, stage_key: first.key, created_by: user.email }).select().single()
+        data = res.data; error = res.error
+      }
       if (error) { setBusy(false); return setErr(error.message) }
       orderId = data.id
       await supabase.from('order_events').insert({ order_id: orderId, shop_id: shop.id, stage_key: first.key, stage_label: first.label })
@@ -74,13 +162,69 @@ export default function OrderForm() {
       cgst_pct: it.cgst_pct || 0, sgst_pct: it.sgst_pct || 0, igst_pct: it.igst_pct || 0, ...itemRow(it),
     }))
     const { error: ie } = await supabase.from('order_items').insert(lines)
+    if (ie) { setBusy(false); return setErr(ie.message) }
+
+    // Autosave customer details
+    try {
+      const custName = c.name.trim()
+      const foundCust = customers.find(x => x.name.toLowerCase() === custName.toLowerCase())
+      const cData = {
+        name: custName,
+        whatsapp: c.whatsapp ? digits10(c.whatsapp) : null,
+        email: c.email.trim().toLowerCase() || null,
+        shop_id: shop.id,
+      }
+      if (foundCust?.id && !String(foundCust.id).startsWith('ord-')) {
+        await supabase.from('order_customers').update(cData).eq('id', foundCust.id)
+      } else {
+        await supabase.from('order_customers').insert(cData)
+      }
+    } catch {}
+
+    // Autosave products and categories
+    try {
+      for (const it of items) {
+        if (!it.name?.trim()) continue
+        const itName = it.name.trim()
+        const foundProd = products.find(p => p.name.toLowerCase() === itName.toLowerCase())
+        const pData = {
+          name: itName,
+          category: it.category?.trim() || null,
+          unit: it.unit?.trim() || null,
+          unit_price: Number(it.unit_price) || 0,
+          cgst: it.cgst_pct ? Number(it.cgst_pct) : null,
+          sgst: it.sgst_pct ? Number(it.sgst_pct) : null,
+          igst: it.igst_pct ? Number(it.igst_pct) : null,
+        }
+        pData.total_price = r2(pData.unit_price * (1 + ((pData.cgst || 0) + (pData.sgst || 0) + (pData.igst || 0)) / 100))
+
+        if (foundProd?.id) {
+          if (it.category && !foundProd.category) {
+            await supabase.from('order_products').update({ category: it.category.trim() }).eq('id', foundProd.id)
+          }
+        } else {
+          await supabase.from('order_products').insert({ ...pData, shop_id: shop.id })
+        }
+      }
+    } catch {}
+
     setBusy(false)
-    if (ie) return setErr(ie.message)
     toast(id ? 'Order updated' : 'Order created')
     nav(`/orders/${orderId}${id ? '' : '?notify=1'}`, { replace: true })
   }
 
-  if (loading) return <div className="page"><div className="empty-state">Loading…</div></div>
+  const custQuery = (c.name || '').trim().toLowerCase()
+  const customerSuggestions = (custQuery
+    ? customers.filter(x => x.name.toLowerCase().includes(custQuery))
+    : customers
+  ).slice(0, 8)
+  const pickCustomer = (cust) => {
+    setC({
+      name: cust.name,
+      whatsapp: cust.whatsapp || '',
+      email: cust.email || '',
+    })
+  }
 
   return (
     <div className="page" style={{ maxWidth: 720 }}>
@@ -90,7 +234,22 @@ export default function OrderForm() {
 
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="section-title" style={{ marginBottom: 12 }}>Customer</div>
-        <div className="form-group"><label className="form-label">Name *</label><input className="form-input" value={c.name} onChange={e => setC({ ...c, name: e.target.value })} /></div>
+        <div className="form-group">
+          <label className="form-label">Name *</label>
+          <input className="form-input" placeholder="e.g. Ravi Kumar" value={c.name} onChange={e => setC({ ...c, name: e.target.value })} />
+          {customerSuggestions.length > 0 && (
+            <div className="suggestion-wrap">
+              <div className="suggestion-label">{custQuery ? 'Matching customers' : 'Recent customers'}</div>
+              <div className="suggestion-pills">
+                {customerSuggestions.map((cust, i) => (
+                  <button key={cust.id || cust.name || i} type="button" className="suggestion-pill" onClick={() => pickCustomer(cust)}>
+                    {cust.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         <div className="grid2">
           <div className="form-group"><label className="form-label">WhatsApp (optional)</label><input className="form-input" inputMode="numeric" placeholder="10-digit number" value={c.whatsapp} onChange={e => setC({ ...c, whatsapp: e.target.value })} /></div>
           <div className="form-group"><label className="form-label">Email (optional)</label><input className="form-input" type="email" value={c.email} onChange={e => setC({ ...c, email: e.target.value })} /></div>
@@ -121,6 +280,36 @@ export default function OrderForm() {
       </div>
 
       <div className="card" style={{ marginBottom: 14 }}>
+        <div className="grid2">
+          <div className="form-group">
+            <label className="form-label">Discount (%)</label>
+            <input
+              className="form-input"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max="100"
+              step="any"
+              placeholder="0"
+              value={discountPct}
+              onChange={e => handlePctChange(e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Discount (₹)</label>
+            <input
+              className="form-input"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              placeholder="0"
+              value={discountAmt}
+              onChange={e => handleAmtChange(e.target.value)}
+            />
+          </div>
+        </div>
+
         {f.freight && <div className="form-group"><label className="form-label">Freight / delivery charges (₹)</label><input className="form-input" type="number" inputMode="decimal" min="0" step="any" value={freight} onChange={e => setFreight(e.target.value)} placeholder="0" /></div>}
         {f.notes && <div className="form-group"><label className="form-label">Notes</label><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></div>}
         <div className="form-group"><label className="form-label">Payment</label>
@@ -132,6 +321,12 @@ export default function OrderForm() {
         {totals.cgst > 0 && <div className="tot-row"><span>CGST</span><span>{inr(totals.cgst)}</span></div>}
         {totals.sgst > 0 && <div className="tot-row"><span>SGST</span><span>{inr(totals.sgst)}</span></div>}
         {totals.igst > 0 && <div className="tot-row"><span>IGST</span><span>{inr(totals.igst)}</span></div>}
+        {totals.discount > 0 && (
+          <div className="tot-row" style={{ color: 'var(--success)', fontWeight: 600 }}>
+            <span>Discount{Number(discountPct) > 0 ? ` (${Number(discountPct)}%)` : ''}</span>
+            <span>- {inr(totals.discount)}</span>
+          </div>
+        )}
         {totals.freight > 0 && <div className="tot-row"><span>Freight / delivery</span><span>{inr(totals.freight)}</span></div>}
         <div className="tot-row grand"><span>Total</span><span>{inr(totals.total)}</span></div>
       </div>

@@ -6,6 +6,7 @@ export function totalsList(o, settings) {
   if (Number(o.cgst_amt) > 0) rows.push(['CGST', o.cgst_amt])
   if (Number(o.sgst_amt) > 0) rows.push(['SGST', o.sgst_amt])
   if (Number(o.igst_amt) > 0) rows.push(['IGST', o.igst_amt])
+  if (Number(o.discount_amount) > 0) rows.push([`Discount${Number(o.discount_percent) > 0 ? ` (${Number(o.discount_percent)}%)` : ''}`, -Number(o.discount_amount)])
   if (Number(o.freight) > 0) rows.push(['Freight / delivery', o.freight])
   return rows
 }

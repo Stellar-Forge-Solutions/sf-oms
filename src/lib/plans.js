@@ -5,6 +5,7 @@ export const UPGRADE_WHATSAPP = '919270243271'
 export const BASIC_PLAN = {
   name: 'Basic', monthly: 99, yearly: 799,
   features: [
+    'Single login (Owner only)',
     'Unlimited orders and products',
     'Your own order stages (up to 7)',
     'Tracking link, bill link, email and WhatsApp updates',
@@ -16,9 +17,9 @@ export const PRO_PLAN = {
   name: 'Pro', monthly: 199, yearly: 1599,
   features: [
     'Everything in Basic',
+    'Up to 2 Staff logins for your team (Counter & Delivery)',
     'Custom URL for your tracking links',
     'Complete branding: colour, logo, no "Powered by"',
-    'Multiple logins for your team (contact us)',
     'Dedicated infrastructure (contact us)',
   ],
 }

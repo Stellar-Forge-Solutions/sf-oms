@@ -11,6 +11,7 @@ import OrdersPage from './pages/OrdersPage'
 import OrderForm from './pages/OrderForm'
 import OrderDetail from './pages/OrderDetail'
 import ProductsPage from './pages/ProductsPage'
+import CustomersPage from './pages/CustomersPage'
 import TrackPage from './pages/TrackPage'
 import ConnectPrinterPage from './pages/ConnectPrinterPage'
 
@@ -43,7 +44,7 @@ const link = ({ isActive }) => `nav-link ${isActive ? 'active' : ''}`
 function Nav() {
   const { pathname } = useLocation()
   const { user, signOut } = useAuth()
-  const { shop } = useShop()
+  const { shop, role } = useShop()
   if (pathname.startsWith('/track') || !shop || shop.status !== 'approved') return null
   const displayName = user?.email?.split('@')[0] ?? ''
   return (
@@ -57,9 +58,11 @@ function Nav() {
         <NavLink to="/orders" end className={link}>Orders</NavLink>
         <NavLink to="/orders/new" className={link}>➕ New Order</NavLink>
         <NavLink to="/products" className={link}>Products</NavLink>
+        <NavLink to="/customers" className={link}>Customers</NavLink>
         <NavLink to="/settings" className={link}>Settings</NavLink>
         <div style={{ display: 'flex', alignItems: 'center', marginLeft: 6, paddingLeft: 10, borderLeft: '1px solid rgba(255,255,255,0.12)', gap: 6 }}>
-          <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>
+          <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>
+          {role && <span style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', padding: '1px 5px', borderRadius: 4, background: role === 'owner' ? 'rgba(0,201,167,0.18)' : 'rgba(255,255,255,0.12)', color: role === 'owner' ? 'var(--teal)' : 'rgba(255,255,255,0.6)' }}>{role}</span>}
           <button onClick={signOut} className="nav-link" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', padding: '5px 8px' }}>Out</button>
         </div>
       </div>
@@ -88,6 +91,7 @@ function AppShell() {
         <Route path="/orders/:id" element={<ProtectedRoute><OrderDetail /></ProtectedRoute>} />
         <Route path="/orders/:id/edit" element={<ProtectedRoute><OrderForm /></ProtectedRoute>} />
         <Route path="/products" element={<ProtectedRoute><ProductsPage /></ProtectedRoute>} />
+        <Route path="/customers" element={<ProtectedRoute><CustomersPage /></ProtectedRoute>} />
         <Route path="/connect-printer" element={<ProtectedRoute><ConnectPrinterPage /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,6 +1,6 @@
 import { useShop } from '../lib/ShopContext'
 import { useAuth } from '../lib/AuthContext'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { upgradeUrl } from '../lib/plans'
 
@@ -22,21 +22,26 @@ function Screen({ title, children }) {
   )
 }
 
-function StartTrial({ shop, reload }) {
-  const [busy, setBusy] = useState(false), [err, setErr] = useState('')
+// An approved shop (approved through Billing / Expense) gets its own 15-day Orders trial automatically on first visit.
+export function StartTrial({ shop, reload }) {
+  const [state, setState] = useState('starting'), [err, setErr] = useState('')
+  const ran = useRef(false)
   const start = async () => {
-    setBusy(true); setErr('')
-    const { data: { session } } = await supabase.auth.getSession()
-    const r = await fetch('/api/start-trial', { method: 'POST', headers: { Authorization: `Bearer ${session?.access_token}` } })
-    const j = await r.json().catch(() => ({}))
-    if (!r.ok) { setBusy(false); return setErr(j.error || 'Could not start the trial') }
-    await reload(); setBusy(false)
+    setState('starting'); setErr('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch('/api/start-trial', { method: 'POST', headers: { Authorization: `Bearer ${session?.access_token}` } })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j.error || 'Could not start the trial')
+      await reload()
+    } catch (e) { setErr(e.message); setState('failed') }
   }
+  useEffect(() => { if (ran.current) return; ran.current = true; start() }, [])   // ref: React dev mode runs effects twice
   return (
-    <Screen title="Start your free Orders trial">
-      <p><b>{shop.name}</b> is already approved with Stellar Forge, so there is no new approval. Start your <b>15-day free trial</b> of Orders with one tap.</p>
-      <button className="btn btn-primary btn-lg" disabled={busy} onClick={start}>{busy ? 'Starting…' : '🚀 Start free trial'}</button>
-      {err && <p style={{ color: '#fca5a5', marginTop: 12 }}>{err}</p>}
+    <Screen title={state === 'starting' ? 'Setting up your free trial…' : 'Could not start your trial'}>
+      {state === 'starting'
+        ? <p><b>{shop.name}</b> is already approved with Stellar Forge, so there is no new approval. Starting your <b>15-day free trial</b> of Orders…</p>
+        : <><p style={{ color: '#fca5a5' }}>{err}</p><button className="btn btn-primary btn-lg" onClick={start}>Try again</button></>}
     </Screen>)
 }
 

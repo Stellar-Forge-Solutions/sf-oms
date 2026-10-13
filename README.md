@@ -30,20 +30,28 @@ React 18 + Vite · Supabase (auth, database, storage) · **Cloudflare Pages** + 
 
 1. Push this folder to a Git repo → Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to Git**.
 2. Build settings: **Framework preset** None · **Build command** `npm run build` · **Build output directory** `dist` · root directory empty.
-3. **Settings → Variables and Secrets** (add to *Production*, and *Preview* if you use it):
+3. **Settings → Variables and Secrets** (add to *Production*, and *Preview* if you use it).
 
-   | Name | Type | Notes |
-   |---|---|---|
-   | `NODE_VERSION` | variable | `20` |
-   | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | variable | used at **build time** by the front end |
-   | `SUPABASE_URL` | variable | same URL, used by the functions |
-   | `SUPABASE_SERVICE_ROLE_KEY` | **secret** | server only |
-   | `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` | **secret** | same as billing |
-   | `GMAIL_SENDER`, `ADMIN_EMAILS`, `ADMIN_DASH_URL` | variable | same as billing |
-   | `PRINT_SIGNING_SECRET` | **secret** | any long random string (a new one is fine) |
-   | `APP_URL` | variable | final public URL, e.g. `https://orders.yourdomain.com` (no trailing slash) |
+   **Variables** (plain text, needed while building):
 
-   Re-deploy after changing variables (build-time `VITE_*` values only take effect on a new build).
+   | Name | Value |
+   |---|---|
+   | `VITE_SUPABASE_URL` | your Supabase project URL |
+   | `VITE_SUPABASE_ANON_KEY` | your Supabase anon key |
+   | `NODE_VERSION` | `20` |
+
+   **Secrets** (everything the functions use at run time):
+
+   | Name | Notes |
+   |---|---|
+   | `SUPABASE_URL` | same URL as above |
+   | `SUPABASE_SERVICE_ROLE_KEY` | server only, never in a `VITE_` variable |
+   | `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `GMAIL_SENDER` | same as billing |
+   | `ADMIN_EMAILS`, `ADMIN_DASH_URL` | same as billing |
+   | `PRINT_SIGNING_SECRET` | any long random string |
+   | `APP_URL` | final public URL, e.g. `https://orders.yourdomain.com` (no trailing slash) |
+
+   `VITE_*` values are baked into the website when it is built, so they are visible to anyone. That is fine for the Supabase URL and anon key, which are public by design. Never put the service-role key in a `VITE_` variable. Redeploy after changing any value; changes to `VITE_*` only take effect on a new build.
 4. **Custom domain**: Pages project → Custom domains. Use this domain for `APP_URL`.
 5. Nothing else is needed: `public/_routes.json` runs functions only for `/api/*`, and Pages serves `index.html` for every other path, so `/track/<token>` and page refreshes work.
 

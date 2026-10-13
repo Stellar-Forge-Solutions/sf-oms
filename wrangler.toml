@@ -1,0 +1,20 @@
+# Cloudflare Pages config for sf-orders.
+# With this file present, the file is the source of truth for plain variables (the dashboard shows them read-only).
+# SECRETS never go here: add them in the dashboard (Settings > Variables and Secrets > Secret)
+# or with: npx wrangler pages secret put SUPABASE_SERVICE_ROLE_KEY --project-name sf-orders
+
+name = "sf-orders"
+pages_build_output_dir = "dist"
+# Tested locally with 2024-01-01 and no compatibility flags.
+compatibility_date = "2024-09-01"
+
+[vars]
+NODE_VERSION = "20"
+# Public by design (baked into the website at build time). Fill in your own values.
+VITE_SUPABASE_URL=https://bnntkretjjqwoagysejn.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJubnRrcmV0ampxd29hZ3lzZWpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MDYxNzcsImV4cCI6MjEwNzI4MjE3N30.eAtS_h6GGIMwF3K4B89cyRPdJmXaIZhLGMD2Rx__f6M
+
+# Secrets to add in the dashboard (do NOT write them in this file):
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+#   GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, GMAIL_SENDER,
+#   ADMIN_EMAILS, ADMIN_DASH_URL, PRINT_SIGNING_SECRET, APP_URL

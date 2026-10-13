@@ -6,7 +6,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../components/Toast'
 import ItemSheet from '../components/ItemSheet'
 import { guardWrite } from '../lib/shop'
-import { calcLine, calcOrder, orderRowTotals, itemRow, inr, digits10, taxActive, PAY } from '../lib/orderUtils'
+import { calcLine, calcOrder, orderRowTotals, itemRow, inr, r2, digits10, taxActive, PAY } from '../lib/orderUtils'
 
 // One screen for both "new order" and "edit order". Fields shown depend on Settings.
 export default function OrderForm() {

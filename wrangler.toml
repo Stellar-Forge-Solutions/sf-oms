@@ -11,8 +11,8 @@ compatibility_date = "2024-09-01"
 [vars]
 NODE_VERSION = "20"
 # Public by design (baked into the website at build time). Fill in your own values.
-VITE_SUPABASE_URL=https://bnntkretjjqwoagysejn.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJubnRrcmV0ampxd29hZ3lzZWpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MDYxNzcsImV4cCI6MjEwNzI4MjE3N30.eAtS_h6GGIMwF3K4B89cyRPdJmXaIZhLGMD2Rx__f6M
+VITE_SUPABASE_URL="https://bnntkretjjqwoagysejn.supabase.co"
+VITE_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJubnRrcmV0ampxd29hZ3lzZWpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MDYxNzcsImV4cCI6MjEwNzI4MjE3N30.eAtS_h6GGIMwF3K4B89cyRPdJmXaIZhLGMD2Rx__f6M"
 
 # Secrets to add in the dashboard (do NOT write them in this file):
 #   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,

@@ -23,7 +23,7 @@ function resizeLogo(file, max = 400) {
 }
 
 export default function SettingsPage() {
-  const { shop, settings, canWrite, isPro, reload } = useShop(), { user } = useAuth(), toast = useToast()
+  const { shop, settings, canWrite, isPro, hasExpense, reload } = useShop(), { user } = useAuth(), toast = useToast()
   const [sf, setSf] = useState(() => Object.fromEntries(SHOP_KEYS.map(k => [k, shop?.[k] ?? ''])))
   const [paper, setPaper] = useState(shop?.paper_width || 58)
   const [s, setS] = useState(() => ({
@@ -82,6 +82,11 @@ export default function SettingsPage() {
     } catch (x) { toast('Logo upload failed: ' + x.message, 'error') }
   }
 
+  const toggleSync = async (on) => {
+    const { error } = await supabase.rpc('set_orders_sales_sync', { p_on: on })
+    if (error) return toast(error.message, 'error')
+    toast(on ? 'Delivered orders now appear as sales in Expense Tracker' : 'Sales sync switched off'); reload()
+  }
   const addExtra = () => setExtras([...extras, { key: 'x' + Date.now().toString(36), label: '' }])
   const H = ({ children, sub }) => <><h3 style={{ marginTop: 22, marginBottom: sub ? 2 : 10 }}>{children}</h3>{sub && <p className="text-muted" style={{ marginBottom: 10 }}>{sub}</p>}</>
 
@@ -136,6 +141,11 @@ export default function SettingsPage() {
         <div className="form-group"><label className="form-label">Thermal printer paper</label>
           <select className="form-input" value={paper} onChange={e => setPaper(e.target.value)}><option value={58}>2 inch (58 mm)</option><option value={80}>3 inch (80 mm)</option></select></div>
         <Link to="/connect-printer" className="btn btn-secondary btn-sm">🖨️ How to connect a thermal printer</Link>
+
+        {hasExpense && <>
+          <H sub="Each day, the value of orders marked Delivered is added to your Expense Tracker as one sale. Returned orders are taken out again.">Expense Tracker</H>
+          <label className="toggle-row"><input type="checkbox" checked={!!shop.sync_orders_sales} disabled={!canWrite} onChange={e => toggleSync(e.target.checked)} />Send delivered orders to Expense Tracker as sales</label>
+        </>}
 
         <H>Pro features{!isPro && <span className="pro-tag">PRO</span>}</H>
         <div className={isPro ? '' : 'lock'}>

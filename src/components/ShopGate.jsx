@@ -1,5 +1,7 @@
 import { useShop } from '../lib/ShopContext'
 import { useAuth } from '../lib/AuthContext'
+import { useState } from 'react'
+import { supabase } from '../lib/supabase'
 import { upgradeUrl } from '../lib/plans'
 
 const wrap = { minHeight: '100vh', background: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }
@@ -20,6 +22,24 @@ function Screen({ title, children }) {
   )
 }
 
+function StartTrial({ shop, reload }) {
+  const [busy, setBusy] = useState(false), [err, setErr] = useState('')
+  const start = async () => {
+    setBusy(true); setErr('')
+    const { data: { session } } = await supabase.auth.getSession()
+    const r = await fetch('/api/start-trial', { method: 'POST', headers: { Authorization: `Bearer ${session?.access_token}` } })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok) { setBusy(false); return setErr(j.error || 'Could not start the trial') }
+    await reload(); setBusy(false)
+  }
+  return (
+    <Screen title="Start your free Orders trial">
+      <p><b>{shop.name}</b> is already approved with Stellar Forge, so there is no new approval. Start your <b>15-day free trial</b> of Orders with one tap.</p>
+      <button className="btn btn-primary btn-lg" disabled={busy} onClick={start}>{busy ? 'Starting…' : '🚀 Start free trial'}</button>
+      {err && <p style={{ color: '#fca5a5', marginTop: 12 }}>{err}</p>}
+    </Screen>)
+}
+
 export default function ShopGate({ children, loading }) {
   const { shop, ent, canWrite, loading: busy, reload } = useShop()
   const { user } = useAuth()
@@ -35,7 +55,7 @@ export default function ShopGate({ children, loading }) {
   if (shop.status === 'rejected') return <Screen title="Account not approved">We could not approve this account.{shop.review_note ? ` Note: ${shop.review_note}` : ''} Reply to our email if you think this is a mistake.</Screen>
   if (shop.status === 'suspended') return <Screen title="Account on hold">Your account is on hold. Please contact Stellar Forge to continue.</Screen>
 
-  if (!ent) return <Screen title="Orders is not activated yet">Your shop is approved, but the Orders product is not switched on for it. Please contact Stellar Forge and we will start your 15-day free trial.</Screen>
+  if (!ent) return <StartTrial shop={shop} reload={reload} />
 
   const end = ent?.paid_until && new Date(ent.paid_until) > Date.now() ? ent.paid_until : ent?.trial_ends_at
   const onTrial = !(ent?.paid_until && new Date(ent.paid_until) > Date.now())

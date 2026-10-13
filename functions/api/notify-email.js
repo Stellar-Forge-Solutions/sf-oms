@@ -1,8 +1,8 @@
 // Sends the customer a professional status e-mail (shop name as sender, shop e-mail as reply-to).
 // Everything is read from the database here, so the browser cannot change the content.
-import { admin, esc } from './_lib/common.js'
-import { sendMail } from './_lib/gmail.js'
-import { mergeSettings, stageLabel } from '../src/lib/orderUtils.js'
+import { admin, esc, json, bearer, readJson, methodNotAllowed } from '../_shared/common.js'
+import { sendMail } from '../_shared/gmail.js'
+import { mergeSettings, stageLabel } from '../../src/lib/orderUtils.js'
 
 const inr = (n) => 'Rs. ' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const LINE = {
@@ -14,30 +14,29 @@ const LINE = {
 }
 const PAY = { unpaid: 'Unpaid', partial: 'Partly paid', paid: 'Paid', refunded: 'Returned back' }
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end()
-  const sb = admin()
-  const jwt = (req.headers.authorization || '').replace(/^Bearer /, '')
-  const { data: { user } } = await sb.auth.getUser(jwt)
-  if (!user) return res.status(401).json({ error: 'Not signed in' })
+export async function onRequestPost({ request, env }) {
+  const sb = admin(env)
+  const { data: { user } } = await sb.auth.getUser(bearer(request))
+  if (!user) return json({ error: 'Not signed in' }, 401)
+  const body = await readJson(request)
   const { data: shop } = await sb.from('shops').select('*').eq('owner_id', user.id).maybeSingle()
-  const { data: o } = await sb.from('orders').select('*').eq('id', String(req.body?.id || '')).maybeSingle()
-  if (!shop || !o || o.shop_id !== shop.id) return res.status(404).json({ error: 'Order not found' })
-  if (!o.customer_email) return res.status(400).json({ error: 'This customer has no email address' })
+  const { data: o } = await sb.from('orders').select('*').eq('id', String(body.id || '')).maybeSingle()
+  if (!shop || !o || o.shop_id !== shop.id) return json({ error: 'Order not found' }, 404)
+  if (!o.customer_email) return json({ error: 'This customer has no email address' }, 400)
   const { data: ok } = await sb.rpc('shop_can_write', { p_shop: shop.id, p_product: 'orders' })
-  if (!ok) return res.status(403).json({ error: 'Your plan is not active' })
+  if (!ok) return json({ error: 'Your plan is not active' }, 403)
 
   const [{ data: st }, { data: items }] = await Promise.all([
     sb.from('order_settings').select('*').eq('shop_id', shop.id).maybeSingle(),
     sb.from('order_items').select('*').eq('order_id', o.id).order('created_at'),
   ])
   const s = mergeSettings(st)
-  const base = (s.custom_url || process.env.APP_URL || '').replace(/\/+$/, '')
-  if (!base) return res.status(500).json({ error: 'APP_URL is not configured on the server' })
+  const base = (s.custom_url || env.APP_URL || '').replace(/\/+$/, '')
+  if (!base) return json({ error: 'APP_URL is not configured on the server' }, 500)
   const label = stageLabel(s.stages, o.stage_key), no = s.order_prefix + String(o.order_no).padStart(5, '0')
   const track = `${base}/track/${o.token}`, bill = o.bill_path ? `${base}/api/bill?t=${o.token}` : null
   const color = /^#[0-9a-f]{6}$/i.test(s.brand_color || '') ? s.brand_color : '#00a88c'
-  const logo = shop.logo_path ? `${process.env.SUPABASE_URL}/storage/v1/object/public/logos/${shop.logo_path}` : null
+  const logo = shop.logo_path ? `${env.SUPABASE_URL}/storage/v1/object/public/logos/${shop.logo_path}` : null
   const btn = (href, text, solid) => `<a href="${esc(href)}" style="display:inline-block;margin:0 8px 8px 0;padding:12px 22px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;${solid ? `background:${color};color:#ffffff;` : `border:1.5px solid ${color};color:${color};`}">${text}</a>`
 
   const rows = (items || []).map(i => `<tr><td style="padding:10px 0;border-bottom:1px solid #e8edf2;font-size:14px;color:#0f1923">${esc(i.name)}<br><span style="font-size:12px;color:#6b7c93">${Number(i.quantity)}${i.unit ? ' ' + esc(i.unit) : ''} × ${inr(i.unit_price)}</span></td><td align="right" style="padding:10px 0;border-bottom:1px solid #e8edf2;font-size:14px;color:#0f1923;white-space:nowrap">${inr(Number(i.line_total) + Number(i.tax_amt))}</td></tr>`).join('')
@@ -67,7 +66,8 @@ export default async function handler(req, res) {
   </table></td></tr></table></body></html>`
 
   try {
-    await sendMail({ to: o.customer_email, subject: `Order ${no}: ${label} · ${shop.name}`, html, fromName: shop.name, replyTo: shop.email })
-  } catch (e) { console.error('notify email failed', e.message); return res.status(502).json({ error: 'Email could not be sent. Please try again.' }) }
-  res.json({ ok: true })
+    await sendMail(env, { to: o.customer_email, subject: `Order ${no}: ${label} · ${shop.name}`, html, fromName: shop.name, replyTo: shop.email })
+  } catch (e) { console.error('notify email failed', e.message); return json({ error: 'Email could not be sent. Please try again.' }, 502) }
+  return json({ ok: true })
 }
+export const onRequest = methodNotAllowed

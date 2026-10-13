@@ -1,15 +1,14 @@
 // PUBLIC order tracking data. No login: the random token in the link is the key.
 // Only customer-safe fields are returned (no phone, email, notes or internal ids).
-import { admin, validToken, publicLogo } from './_lib/common.js'
-import { mergeSettings } from '../src/lib/orderUtils.js'
+import { admin, validToken, publicLogo, json } from '../_shared/common.js'
+import { mergeSettings } from '../../src/lib/orderUtils.js'
 
-export default async function handler(req, res) {
-  res.setHeader('Cache-Control', 'no-store')
-  const t = String(req.query.t || '')
-  if (!validToken(t)) return res.status(404).json({ error: 'Order not found' })
-  const sb = admin()
+export async function onRequestGet({ request, env }) {
+  const t = new URL(request.url).searchParams.get('t')
+  if (!validToken(t)) return json({ error: 'Order not found' }, 404)
+  const sb = admin(env)
   const { data: o } = await sb.from('orders').select('*').eq('token', t).maybeSingle()
-  if (!o) return res.status(404).json({ error: 'Order not found' })
+  if (!o) return json({ error: 'Order not found' }, 404)
   const [{ data: shop }, { data: st }, { data: items }, { data: events }] = await Promise.all([
     sb.from('shops').select('name,tagline,address,mobile,whatsapp,website,gst_no,thank_you,logo_path').eq('id', o.shop_id).single(),
     sb.from('order_settings').select('*').eq('shop_id', o.shop_id).maybeSingle(),
@@ -17,8 +16,8 @@ export default async function handler(req, res) {
     sb.from('order_events').select('stage_key,created_at').eq('order_id', o.id).order('created_at'),
   ])
   const s = mergeSettings(st)
-  res.json({
-    shop: { name: shop.name, tagline: shop.tagline, address: shop.address, mobile: shop.mobile, whatsapp: shop.whatsapp, website: shop.website, gst_no: shop.gst_no, thank_you: shop.thank_you, logo: publicLogo(shop.logo_path) },
+  return json({
+    shop: { name: shop.name, tagline: shop.tagline, address: shop.address, mobile: shop.mobile, whatsapp: shop.whatsapp, website: shop.website, gst_no: shop.gst_no, thank_you: shop.thank_you, logo: publicLogo(env, shop.logo_path) },
     brand: { color: s.brand_color || null, hide_powered: !!s.hide_powered },
     stages: s.stages, category_label: s.category_label, fields: s.fields,
     order: {

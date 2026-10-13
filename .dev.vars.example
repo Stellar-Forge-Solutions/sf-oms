@@ -1,0 +1,11 @@
+# Local testing only (copy to .dev.vars). On Cloudflare set these as Pages secrets / variables.
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+GMAIL_CLIENT_ID=
+GMAIL_CLIENT_SECRET=
+GMAIL_REFRESH_TOKEN=
+GMAIL_SENDER=
+ADMIN_EMAILS=
+ADMIN_DASH_URL=
+PRINT_SIGNING_SECRET=
+APP_URL=http://localhost:8788

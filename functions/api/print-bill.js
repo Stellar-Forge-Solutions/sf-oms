@@ -1,32 +1,29 @@
 // Receipt JSON for the Thermer / Bluetooth Print app. Needs a valid signed token from /api/print-token.
 // Layout width follows the shop's paper setting (58 mm = 32 chars, 80 mm = 48 chars).
-import { createHmac, timingSafeEqual } from 'node:crypto'
-import { admin } from './_lib/common.js'
-import { mergeSettings } from '../src/lib/orderUtils.js'
+import { admin, json, hmacHex, safeEqual } from '../_shared/common.js'
+import { mergeSettings } from '../../src/lib/orderUtils.js'
 
 const pad = (str, len, right = false) => { const s = String(str).substring(0, len); return right ? s.padStart(len) : s.padEnd(len) }
 const text = (content, { bold = 0, align = 0, format = 0 } = {}) => ({ type: 0, content, bold, align, format })
 const BLANK = { type: 0, content: ' ', bold: 0, align: 0, format: 0 }
 const PAY = { unpaid: 'Unpaid', partial: 'Partly paid', paid: 'Paid', refunded: 'Returned back' }
 
-function validToken(id, t) {
+async function validToken(env, id, t) {
   const [exp, sig] = String(t || '').split('.')
   if (!exp || !sig || Date.now() > Number(exp)) return false
-  const good = createHmac('sha256', process.env.PRINT_SIGNING_SECRET).update(`${id}.${exp}`).digest('hex')
-  const a = Buffer.from(sig), b = Buffer.from(good)
-  return a.length === b.length && timingSafeEqual(a, b)
+  return safeEqual(sig, await hmacHex(env.PRINT_SIGNING_SECRET, `${id}.${exp}`))
 }
 
-export default async function handler(req, res) {
-  res.setHeader('Cache-Control', 'no-store')
-  const id = String(req.query.id || '')
-  if (!id || !validToken(id, req.query.t)) return res.status(401).json({ error: 'Invalid or expired print link' })
+export async function onRequestGet({ request, env }) {
+  const q = new URL(request.url).searchParams
+  const id = String(q.get('id') || '')
+  if (!id || !(await validToken(env, id, q.get('t')))) return json({ error: 'Invalid or expired print link' }, 401)
 
-  const sb = admin()
+  const sb = admin(env)
   const { data: o } = await sb.from('orders').select('*').eq('id', id).maybeSingle()
-  if (!o) return res.status(404).json({ error: 'Order not found' })
+  if (!o) return json({ error: 'Order not found' }, 404)
   const { data: ok } = await sb.rpc('shop_can_write', { p_shop: o.shop_id, p_product: 'orders' })
-  if (!ok) return res.status(403).json({ error: 'Orders is not active for this shop' })
+  if (!ok) return json({ error: 'Orders is not active for this shop' }, 403)
   const [{ data: s }, { data: st }, { data: items = [] }] = await Promise.all([
     sb.from('shops').select('*').eq('id', o.shop_id).single(),
     sb.from('order_settings').select('*').eq('shop_id', o.shop_id).maybeSingle(),
@@ -62,7 +59,7 @@ export default async function handler(req, res) {
   rows.push(text(SOLID))
   rows.push(text(`Payment: ${PAY[o.payment_status]}`, { bold: 1, align: 1 }))
   if (o.payment_status === 'partial') rows.push(text(`Received Rs.${money(o.amount_paid)}  Due Rs.${money(Number(o.total) - Number(o.amount_paid))}`, { align: 1 }))
-  const base = (set.custom_url || process.env.APP_URL || '').replace(/\/+$/, '')
+  const base = (set.custom_url || env.APP_URL || '').replace(/\/+$/, '')
   if (base) { rows.push(text('Scan to track your order', { align: 1 })); rows.push({ type: 3, value: `${base}/track/${o.token}`, size: s.paper_width === 80 ? 50 : 38, align: 1 }) }
   rows.push(BLANK)
   rows.push(text(s.thank_you || 'Thank you!', { bold: 1, align: 1, format: 3 }))
@@ -70,6 +67,5 @@ export default async function handler(req, res) {
   rows.push(BLANK); rows.push(BLANK)
 
   const payload = {}; rows.forEach((r, i) => { payload[i] = r })
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.status(200).json(payload)
+  return json(payload, 200, { 'Access-Control-Allow-Origin': '*' })
 }

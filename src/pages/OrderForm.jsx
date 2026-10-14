@@ -22,6 +22,7 @@ export default function OrderForm() {
   const [discountAmt, setDiscountAmt] = useState('')
   const [discountMode, setDiscountMode] = useState('pct')
   const [notes, setNotes] = useState('')
+  const [deliveryDate, setDeliveryDate] = useState('')
   const [pay, setPay] = useState('unpaid'), [paid, setPaid] = useState('')
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
@@ -66,6 +67,7 @@ export default function OrderForm() {
       setFreight(Number(o.freight) ? String(o.freight) : '')
       setDiscountPct(Number(o.discount_percent) ? String(o.discount_percent) : '')
       setDiscountAmt(Number(o.discount_amount) ? String(o.discount_amount) : '')
+      setDeliveryDate(o.delivery_date ? String(o.delivery_date).split('T')[0] : '')
       setNotes(o.notes || ''); setPay(o.payment_status); setPaid(Number(o.amount_paid) ? String(o.amount_paid) : '')
       setLoading(false)
     })()
@@ -137,14 +139,24 @@ export default function OrderForm() {
       customer_name: c.name.trim(), customer_whatsapp: c.whatsapp ? digits10(c.whatsapp) : null, customer_email: c.email.trim().toLowerCase() || null,
       payment_status: pay, amount_paid: pay === 'paid' ? totals.total : pay === 'partial' ? Number(paid) : 0,
       notes: f.notes ? notes.trim() || null : null, discount_percent: effPct, discount_amount: effAmt,
+      delivery_date: deliveryDate ? deliveryDate : null,
       ...orderRowTotals(totals, effPct), updated_at: new Date().toISOString(),
     }
     let orderId = id
     let createdOrder = null
     if (id) {
       let { error } = await supabase.from('orders').update(row).eq('id', id)
-      if (error && (error.message?.includes('discount_percent') || error.message?.includes('discount_amount'))) {
-        const fallback = { ...row }; delete fallback.discount_percent; delete fallback.discount_amount
+      if (error && (error.message?.includes('discount_percent') || error.message?.includes('discount_amount') || error.message?.includes('delivery_date'))) {
+        const fallback = { ...row }
+        if (error.message?.includes('discount_percent') || error.message?.includes('discount_amount')) {
+          delete fallback.discount_percent; delete fallback.discount_amount
+        }
+        if (error.message?.includes('delivery_date')) {
+          delete fallback.delivery_date
+          if (deliveryDate) {
+            fallback.notes = (fallback.notes ? fallback.notes + '\n' : '') + `Delivery Date: ${deliveryDate}`
+          }
+        }
         error = (await supabase.from('orders').update(fallback).eq('id', id)).error
       }
       if (error) { setBusy(false); return setErr(error.message) }
@@ -152,8 +164,17 @@ export default function OrderForm() {
     } else {
       const first = settings.stages[0]
       let { data, error } = await supabase.from('orders').insert({ ...row, shop_id: shop.id, stage_key: first.key, created_by: user.email }).select().single()
-      if (error && (error.message?.includes('discount_percent') || error.message?.includes('discount_amount'))) {
-        const fallback = { ...row }; delete fallback.discount_percent; delete fallback.discount_amount
+      if (error && (error.message?.includes('discount_percent') || error.message?.includes('discount_amount') || error.message?.includes('delivery_date'))) {
+        const fallback = { ...row }
+        if (error.message?.includes('discount_percent') || error.message?.includes('discount_amount')) {
+          delete fallback.discount_percent; delete fallback.discount_amount
+        }
+        if (error.message?.includes('delivery_date')) {
+          delete fallback.delivery_date
+          if (deliveryDate) {
+            fallback.notes = (fallback.notes ? fallback.notes + '\n' : '') + `Delivery Date: ${deliveryDate}`
+          }
+        }
         const res = await supabase.from('orders').insert({ ...fallback, shop_id: shop.id, stage_key: first.key, created_by: user.email }).select().single()
         data = res.data; error = res.error
       }
@@ -283,6 +304,10 @@ export default function OrderForm() {
         <div className="grid2">
           <div className="form-group"><label className="form-label">WhatsApp (optional)</label><input className="form-input" inputMode="numeric" placeholder="10-digit number" value={c.whatsapp} onChange={e => setC({ ...c, whatsapp: e.target.value })} /></div>
           <div className="form-group"><label className="form-label">Email (optional)</label><input className="form-input" type="email" value={c.email} onChange={e => setC({ ...c, email: e.target.value })} /></div>
+        </div>
+        <div className="form-group" style={{ marginTop: 8 }}>
+          <label className="form-label">Expected Delivery Date (optional)</label>
+          <input className="form-input" type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
         </div>
       </div>
 
@@ -432,17 +457,25 @@ export default function OrderForm() {
             <div style={{ marginTop: 8 }}>
               <input
                 type="file"
-                accept=".pdf,image/png,image/jpeg"
+                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                 onChange={e => {
                   const f = e.target.files?.[0]
                   if (f) {
+                    const ext = (f.name.split('.').pop() || '').toLowerCase()
+                    const allowed = ['pdf', 'jpg', 'jpeg', 'png']
+                    if (!allowed.includes(ext)) {
+                      toast('Only PDF, JPG, and PNG files are allowed', 'error')
+                      e.target.value = ''
+                      setBillFile(null)
+                      return
+                    }
                     if (f.size > 10 * 1024 * 1024) {
                       toast('File is too big (max 10 MB)', 'error')
                       e.target.value = ''
                       setBillFile(null)
-                    } else {
-                      setBillFile(f)
+                      return
                     }
+                    setBillFile(f)
                   }
                 }}
               />

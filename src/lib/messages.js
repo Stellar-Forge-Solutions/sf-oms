@@ -1,5 +1,5 @@
 // WhatsApp wording (wa.me click-to-send). The email twin lives in api/notify-email.js.
-import { stageLabel, inr, orderNo, trackUrl, billUrl, PAY, waNumber } from './orderUtils'
+import { stageLabel, inr, orderNo, trackUrl, billUrl, PAY, waNumber, fmtDate } from './orderUtils'
 
 const LINE = {
   received: 'We have received your order and will start working on it shortly.',
@@ -20,10 +20,21 @@ export function whatsappText(order, settings, shop) {
     `Hello ${order.customer_name},`, '',
     `*Order ${orderNo(order, settings)}: ${label}*`,
     statusLine(order.stage_key, label), '',
+  ]
+  if (order.delivery_date) {
+    out.push(`📅 Expected delivery: ${fmtDate(order.delivery_date)}`)
+  }
+  if (order.delay_note) {
+    out.push(`ℹ️ Note: ${order.delay_note}`)
+  }
+  if (order.delivery_date || order.delay_note) {
+    out.push('')
+  }
+  out.push(
     `Order total: ${inr(order.total)}`,
     `Payment: ${PAY[order.payment_status]?.label}${order.payment_status === 'partial' ? ` (${inr(order.amount_paid)} received)` : ''}`, '',
     `Track your order: ${trackUrl(order, settings)}`,
-  ]
+  )
   if (order.tracking_url) out.push(`Courier tracking: ${order.tracking_url}`)
   if (bill) out.push(`Download your bill: ${bill}`)
   out.push('', 'Thank you for choosing us.', `*${shop.name}*`)

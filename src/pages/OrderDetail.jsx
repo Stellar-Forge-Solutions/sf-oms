@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast'
 import ItemSheet from '../components/ItemSheet'
 import NotifyModal from '../components/NotifyModal'
 import TrackingModal from '../components/TrackingModal'
+import DelayModal from '../components/DelayModal'
 import { StageBadge, PayBadge } from '../components/Badges'
 import { guardWrite, logoDataUrl, logoUrl } from '../lib/shop'
 import { bluetoothPrint } from '../lib/print'
@@ -20,6 +21,7 @@ export default function OrderDetail() {
   const [o, setO] = useState(null), [items, setItems] = useState([]), [events, setEvents] = useState([]), [products, setProducts] = useState([])
   const [sheet, setSheet] = useState(false), [notify, setNotify] = useState(false)
   const [trackingModal, setTrackingModal] = useState(false)
+  const [delayModal, setDelayModal] = useState(false)
   const [pay, setPay] = useState('unpaid'), [paid, setPaid] = useState('')
   const [busy, setBusy] = useState('')
 
@@ -77,6 +79,30 @@ export default function OrderDetail() {
     await move(readyStage, '')
   }
 
+  const handleDelaySave = async ({ deliveryDate, reason }) => {
+    if (!guardWrite('Updating delivery date')) return
+    setBusy('delay')
+    const patch = { delivery_date: deliveryDate, updated_at: new Date().toISOString() }
+    let { data, error } = await supabase.from('orders').update(patch).eq('id', o.id).select().single()
+    if (error && error.message?.includes('delivery_date')) {
+      // fallback if column is not yet present
+      const noteAppend = `Rescheduled to ${deliveryDate}${reason ? ` (${reason})` : ''}`
+      const notesWithDate = (o.notes ? o.notes + '\n' : '') + noteAppend
+      const res = await supabase.from('orders').update({ notes: notesWithDate, updated_at: new Date().toISOString() }).eq('id', o.id).select().single()
+      data = res.data; error = res.error
+    }
+    if (error) { setBusy(''); return toast(error.message, 'error') }
+    const eventLabel = `Delivery rescheduled to ${fmtDate(deliveryDate)}${reason ? `: ${reason}` : ''}`
+    await supabase.from('order_events').insert({ order_id: o.id, shop_id: shop.id, stage_key: 'delayed', stage_label: eventLabel })
+    setBusy('')
+    setDelayModal(false)
+    const updatedOrder = { ...(data || o), delivery_date: deliveryDate, delay_note: reason || undefined }
+    setO(updatedOrder)
+    await load()
+    toast('Delivery date updated')
+    setNotify(true)
+  }
+
   const savePay = async () => {
     if (!guardWrite('Changing payment')) return
     if (pay === 'partial' && !(Number(paid) > 0 && Number(paid) < Number(o.total))) return toast('Enter an amount received that is less than the total', 'error')
@@ -124,8 +150,8 @@ export default function OrderDetail() {
     if (!file) return
     if (!guardWrite('Uploading the bill')) return
     if (file.size > 10 * 1024 * 1024) return toast('File is too big (max 10 MB)', 'error')
-    const ext = (file.name.split('.').pop() || 'pdf').toLowerCase()
-    if (!['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) return toast('Upload a PDF, PNG or JPG', 'error')
+    const ext = (file.name.split('.').pop() || '').toLowerCase()
+    if (!['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) return toast('Only PDF, JPG, and PNG files are allowed', 'error')
     setBusy('up')
     try { await storeBill(file, ext, file.type || 'application/octet-stream', 'uploaded'); toast('Bill uploaded') } catch (x) { toast('Upload failed: ' + x.message, 'error') }
     setBusy('')
@@ -150,8 +176,21 @@ export default function OrderDetail() {
       <div className="page-head">
         <div>
           <h1 className="page-title">{orderNo(o, settings)} · {o.customer_name}</h1>
-          <p className="page-subtitle">{fmtDateTime(o.created_at)}{o.customer_whatsapp ? ` · ${o.customer_whatsapp}` : ''}{o.customer_email ? ` · ${o.customer_email}` : ''}</p>
-          <div className="flex gap-2 mt-2"><StageBadge stages={stages} k={o.stage_key} /><PayBadge status={o.payment_status} /></div>
+          <p className="page-subtitle">
+            {fmtDateTime(o.created_at)}
+            {o.customer_whatsapp ? ` · ${o.customer_whatsapp}` : ''}
+            {o.customer_email ? ` · ${o.customer_email}` : ''}
+            {o.delivery_date ? ` · 📅 Delivery: ${fmtDate(o.delivery_date)}` : ''}
+          </p>
+          <div className="flex gap-2 mt-2">
+            <StageBadge stages={stages} k={o.stage_key} />
+            <PayBadge status={o.payment_status} />
+            {o.delivery_date && (
+              <span className="badge" style={{ background: '#f1f5f9', color: '#1e293b', border: '1px solid #cbd5e1' }}>
+                📅 Due {fmtDate(o.delivery_date)}
+              </span>
+            )}
+          </div>
         </div>
         <Link to={`/orders/${o.id}/edit`} className="btn btn-secondary btn-sm">✏️ Edit order</Link>
       </div>
@@ -166,6 +205,16 @@ export default function OrderDetail() {
         <div className="flex gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
           {prev && <button className="btn btn-ghost" disabled={!!busy || !canWrite} onClick={() => move(prev)}>← Back to {prev.label}</button>}
           {next && <button className="btn btn-primary" style={{ flex: 1 }} disabled={!!busy || !canWrite} onClick={() => move(next)}>{busy === 'stage' ? 'Moving…' : `Move to ${next.label} →`}</button>}
+          {o.stage_key === 'processing' && (
+            <button
+              className="btn btn-secondary"
+              style={{ borderColor: '#f59e0b', color: '#b45309' }}
+              disabled={!!busy || !canWrite}
+              onClick={() => setDelayModal(true)}
+            >
+              ⏰ Delay order
+            </button>
+          )}
           <button className="btn btn-secondary" onClick={() => setNotify(true)}>🔔 Notify customer</button>
           {o.bill_path && (
             <a
@@ -267,7 +316,7 @@ export default function OrderDetail() {
             <div className="flex flex-col gap-2">
               <button className="btn btn-primary" disabled={!!busy || !canWrite} onClick={generate}>{busy === 'gen' ? 'Generating…' : o.bill_path ? '🧾 Generate bill again' : '🧾 Generate bill'}</button>
               <button className="btn btn-secondary" disabled={!!busy || !canWrite} onClick={() => fileRef.current.click()}>{busy === 'up' ? 'Uploading…' : '⬆️ Upload your own bill'}</button>
-              <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg" hidden onChange={upload} />
+              <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" hidden onChange={upload} />
               {o.bill_path && <a className="btn btn-secondary" href={billUrl(o, settings)} target="_blank" rel="noopener noreferrer">⬇️ View / download bill</a>}
             </div>
             <div className="divider" />
@@ -297,6 +346,13 @@ export default function OrderDetail() {
           onSave={handleTrackingSave}
           onSkip={handleTrackingSkip}
           onClose={() => setTrackingModal(false)}
+        />
+      )}
+      {delayModal && (
+        <DelayModal
+          order={o}
+          onSave={handleDelaySave}
+          onClose={() => setDelayModal(false)}
         />
       )}
       {notify && <NotifyModal order={o} settings={settings} shop={shop} onClose={() => setNotify(false)} />}

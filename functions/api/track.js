@@ -25,6 +25,7 @@ export async function onRequestGet({ request, env }) {
       amount_paid: o.amount_paid, subtotal: o.subtotal, cgst_amt: o.cgst_amt, sgst_amt: o.sgst_amt, igst_amt: o.igst_amt, freight: o.freight,
       discount_percent: o.discount_percent || 0, discount_amount: o.discount_amount || 0,
       total: o.total, has_bill: !!o.bill_path, tracking_url: o.tracking_url || null, notes: o.notes || null,
+      delivery_date: o.delivery_date || null,
     },
     items, events,
   })

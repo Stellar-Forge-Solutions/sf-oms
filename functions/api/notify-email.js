@@ -2,7 +2,7 @@
 // Everything is read from the database here, so the browser cannot change the content.
 import { admin, esc, json, bearer, readJson, methodNotAllowed } from '../_shared/common.js'
 import { sendBrevoMail } from '../_shared/brevo.js'
-import { mergeSettings, stageLabel } from '../../src/lib/orderUtils.js'
+import { mergeSettings, stageLabel, fmtDate } from '../../src/lib/orderUtils.js'
 
 const inr = (n) => 'Rs. ' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const LINE = {
@@ -52,6 +52,7 @@ export async function onRequestPost({ request, env }) {
       <p style="margin:0 0 18px;font-size:15px;line-height:1.55;color:#33434f">${esc(LINE[o.stage_key] || `Your order status has been updated to "${label}".`)}</p>
       <table width="100%" cellpadding="0" cellspacing="0" style="background:#f7f8fa;border-radius:10px;margin-bottom:20px"><tr>
         <td style="padding:14px 16px"><div style="font-size:11px;color:#6b7c93;text-transform:uppercase;letter-spacing:.06em">Order</div><div style="font-size:16px;font-weight:700;color:#0f1923">${esc(no)}</div></td>
+        ${o.delivery_date ? `<td style="padding:14px 16px"><div style="font-size:11px;color:#6b7c93;text-transform:uppercase;letter-spacing:.06em">Expected Delivery</div><div style="font-size:15px;font-weight:700;color:#0f1923">${esc(fmtDate(o.delivery_date))}</div></td>` : ''}
         <td style="padding:14px 16px" align="right"><div style="font-size:11px;color:#6b7c93;text-transform:uppercase;letter-spacing:.06em">Current status</div><div style="font-size:16px;font-weight:700;color:${color}">${esc(label)}</div></td></tr></table>
       <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
       <table width="100%" cellpadding="0" cellspacing="0" style="margin:10px 0 4px">

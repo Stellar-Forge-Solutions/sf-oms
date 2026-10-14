@@ -104,7 +104,10 @@ export default function OrdersPage() {
                 )}
               </div>
             </div>
-            <div className="row mt-1"><span className="text-muted mono" style={{ fontSize: '.75rem' }}>{orderNo(o, settings)} · {fmtDate(o.created_at)}</span></div>
+            <div className="row mt-1">
+              <span className="text-muted mono" style={{ fontSize: '.75rem' }}>{orderNo(o, settings)} · {fmtDate(o.created_at)}</span>
+              {o.delivery_date && <span style={{ fontSize: '.75rem', color: 'var(--brand)', fontWeight: 600 }}>📅 Due {fmtDate(o.delivery_date)}</span>}
+            </div>
             <div className="flex gap-2 mt-2" style={{ flexWrap: 'wrap' }}><StageBadge stages={stages} k={o.stage_key} /><PayBadge status={o.payment_status} /></div>
           </Link>))}
       </div>
@@ -114,7 +117,12 @@ export default function OrdersPage() {
         <thead><tr><th>Order</th><th>Date</th><th>Customer</th><th>Status</th><th>Payment</th><th style={{ textAlign: 'right' }}>Total</th><th></th></tr></thead>
         <tbody>{shown.map(o => (
           <tr key={o.id} className={`row-link ${o.stage_key === 'returned' ? 'is-returned' : ''}`} onClick={() => nav(`/orders/${o.id}`)}>
-            <td className="mono">{orderNo(o, settings)}</td><td>{fmtDate(o.created_at)}</td><td><b>{o.customer_name}</b><div className="text-muted" style={{ fontSize: '.75rem' }}>{o.customer_whatsapp || o.customer_email || ''}</div></td>
+            <td className="mono">{orderNo(o, settings)}</td>
+            <td>
+              <div>{fmtDate(o.created_at)}</div>
+              {o.delivery_date && <div style={{ fontSize: '.72rem', color: 'var(--brand)', fontWeight: 600 }}>Due {fmtDate(o.delivery_date)}</div>}
+            </td>
+            <td><b>{o.customer_name}</b><div className="text-muted" style={{ fontSize: '.75rem' }}>{o.customer_whatsapp || o.customer_email || ''}</div></td>
             <td><StageBadge stages={stages} k={o.stage_key} /></td><td><PayBadge status={o.payment_status} /></td>
             <td style={{ textAlign: 'right' }}><b>{inr(o.total)}</b></td>
             <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>

@@ -40,6 +40,35 @@ export async function exportOrders(kind, orders, settings, label = 'orders') {
   }
 }
 
+// ── Customers: export ─────────────────────────────────────
+export async function exportCustomers(kind, customers, label = 'customers') {
+  if (!guardWrite('Export')) return
+  const head = ['Customer Name', 'WhatsApp', 'Email', 'Address']
+  const body = customers.map(c => [
+    c.name || '',
+    c.whatsapp || '',
+    c.email || '',
+    c.address || '',
+  ])
+  const name = `${label}-${new Date().toISOString().slice(0, 10)}`
+  if (kind === 'csv') save(new Blob(['\uFEFF' + [head, ...body].map(r => r.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }), name + '.csv')
+  if (kind === 'xlsx') {
+    const XLSX = await import('xlsx'); const ws = XLSX.utils.aoa_to_sheet([head, ...body]); const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Customers'); XLSX.writeFile(wb, name + '.xlsx')
+  }
+  if (kind === 'pdf') {
+    const { jsPDF } = await import('jspdf'); const autoTable = (await import('jspdf-autotable')).default
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    doc.setFontSize(14).text(`Customers (${customers.length})`, 14, 14)
+    autoTable(doc, {
+      startY: 20, head: [head],
+      body: body,
+      headStyles: { fillColor: [15, 25, 35] }, styles: { fontSize: 9 },
+    })
+    doc.save(name + '.pdf')
+  }
+}
+
 // ── Products: sample + import ─────────────────────────────
 export const productHeaders = (catLabel) => ['Product Name', catLabel, 'CGST %', 'SGST %', 'IGST %', 'Unit', 'Unit Price', 'Total Price']
 

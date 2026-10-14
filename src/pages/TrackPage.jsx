@@ -41,6 +41,12 @@ export default function TrackPage() {
             <div className="text-muted" style={{ fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>Order Tracking</div>
             <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--ink)', margin: '2px 0 4px' }}>{o.no}</div>
             <div className="text-muted" style={{ fontSize: '.8rem' }}>Placed on {fmtDateTime(o.created_at)}</div>
+            {o.delivery_date && (
+              <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '.82rem', fontWeight: 600, color: '#1e293b', background: '#f1f5f9', padding: '3px 9px', borderRadius: 6 }}>
+                <span>📅 Expected Delivery:</span>
+                <span style={{ color: color }}>{fmtDate(o.delivery_date)}</span>
+              </div>
+            )}
           </div>
           <div
             className="track-hero-badge"

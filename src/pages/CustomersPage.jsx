@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useShop } from '../lib/ShopContext'
 import { useToast } from '../components/Toast'
 import { guardWrite } from '../lib/shop'
-import { downloadCustomerSample, readCustomersFile, customerHeaders } from '../lib/exportUtils'
+import { downloadCustomerSample, readCustomersFile, customerHeaders, exportCustomers } from '../lib/exportUtils'
 import { digits10 } from '../lib/orderUtils'
 
 const blank = { name: '', whatsapp: '', email: '', address: '' }
@@ -142,7 +142,22 @@ export default function CustomersPage() {
       </div>
 
       <div className="card" style={{ marginBottom: 14 }}>
-        <div className="section-title" style={{ marginBottom: 6 }}>Import from Excel</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
+          <div className="section-title" style={{ margin: 0 }}>Import & Export</div>
+          {!!shown.length && (
+            <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => exportCustomers('xlsx', shown, shop?.name || 'customers')}>
+                📊 Export Excel
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => exportCustomers('csv', shown, shop?.name || 'customers')}>
+                📄 Export CSV
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => exportCustomers('pdf', shown, shop?.name || 'customers')}>
+                📑 Export PDF
+              </button>
+            </div>
+          )}
+        </div>
         <p className="text-muted" style={{ marginBottom: 10 }}>Columns: {customerHeaders().join(', ')}. Customers with the same name are updated.</p>
         <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
           <button className="btn btn-secondary btn-sm" onClick={downloadCustomerSample}>⬇️ Download sample file</button>

@@ -145,8 +145,15 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <div style={{ marginTop: '24px', color: 'rgba(255,255,255,0.25)', fontSize: '0.75rem', textAlign: 'center' }}>
-        Powered by Stellar Forge
+      <div style={{ marginTop: '24px', fontSize: '0.75rem', textAlign: 'center' }}>
+        <a
+          href="https://stellarforgetech.in"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: 'rgba(255,255,255,0.3)', textDecoration: 'none' }}
+        >
+          Powered by <span style={{ textDecoration: 'underline' }}>Stellar Forge</span>
+        </a>
       </div>
       </section>
     </div>

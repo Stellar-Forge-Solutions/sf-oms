@@ -44,6 +44,11 @@ export async function sendBrevoMail(env, { to, subject, html, fromName = 'Stella
   if (!res.ok) {
     const errorBody = await res.text()
     console.error('Brevo API error:', res.status, errorBody)
-    throw new Error(`Brevo send failed: ${res.status}`)
+    let parsedMsg = errorBody
+    try {
+      const parsed = JSON.parse(errorBody)
+      if (parsed.message) parsedMsg = parsed.message
+    } catch (_) {}
+    throw new Error(`Brevo ${res.status}: ${parsedMsg}`)
   }
 }

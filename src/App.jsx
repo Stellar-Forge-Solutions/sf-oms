@@ -74,7 +74,18 @@ function PoweredBy() {
   const { pathname } = useLocation()
   const { shop, settings } = useShop()
   if (pathname.startsWith('/track') || !shop || shop.status !== 'approved' || settings?.hide_powered) return null
-  return <div style={{ textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-muted, #6b7c93)', padding: '14px 0 22px' }}>Powered by Stellar Forge</div>
+  return (
+    <div style={{ textAlign: 'center', fontSize: '0.72rem', padding: '14px 0 22px' }}>
+      <a
+        href="https://stellarforgetech.in"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: 'var(--text-muted, #6b7c93)', textDecoration: 'none' }}
+      >
+        Powered by <span style={{ textDecoration: 'underline' }}>Stellar Forge</span>
+      </a>
+    </div>
+  )
 }
 
 function AppShell() {

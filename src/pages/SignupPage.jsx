@@ -48,6 +48,15 @@ export default function SignupPage() {
         <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem' }}>We review every new shop within 1 hour (9 am – 9 pm IST) and message you on WhatsApp. Your trial starts when you are approved.</p>
       </form>
       <Link to="/login" style={{ color: 'rgba(255,255,255,0.5)', marginTop: 16, fontSize: '0.85rem' }}>Already have an account? Sign in</Link>
-      <div style={{ marginTop: 24, color: 'rgba(255,255,255,0.2)', fontSize: '0.75rem' }}>Powered by Stellar Forge</div>
+      <div style={{ marginTop: 24, fontSize: '0.75rem' }}>
+        <a
+          href="https://stellarforgetech.in"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: 'rgba(255,255,255,0.3)', textDecoration: 'none' }}
+        >
+          Powered by <span style={{ textDecoration: 'underline' }}>Stellar Forge</span>
+        </a>
+      </div>
     </div>)
 }

@@ -62,12 +62,15 @@ export async function onRequestPost({ request, env }) {
     </td></tr>
     <tr><td style="background:#f7f8fa;padding:16px 28px;border-top:1px solid #e2e8f0;font-size:12px;color:#6b7c93;line-height:1.6">
       <b style="color:#0f1923">${esc(shop.name)}</b>${shop.address ? '<br>' + esc(shop.address) : ''}${contact ? '<br>' + contact : ''}${shop.gst_no ? '<br>GSTIN: ' + esc(shop.gst_no) : ''}
-      ${s.hide_powered ? '' : '<br><span style="color:#9aa8b8">Powered by Stellar Forge</span>'}</td></tr>
+      ${s.hide_powered ? '' : '<br><a href="https://stellarforgetech.in" target="_blank" rel="noopener noreferrer" style="color:#8a9ba8;text-decoration:none;font-weight:500">Powered by <span style="text-decoration:underline">Stellar Forge</span></a>'}</td></tr>
   </table></td></tr></table></body></html>`
 
   try {
     await sendBrevoMail(env, { to: o.customer_email, subject: `Order ${no}: ${label} · ${shop.name}`, html, fromName: shop.name, replyTo: shop.email })
-  } catch (e) { console.error('notify email failed', e.message); return json({ error: 'Email could not be sent. Please try again.' }, 502) }
+  } catch (e) {
+    console.error('notify email failed:', e.message)
+    return json({ error: `Email failed: ${e.message}` }, 502)
+  }
   return json({ ok: true })
 }
 export const onRequest = methodNotAllowed

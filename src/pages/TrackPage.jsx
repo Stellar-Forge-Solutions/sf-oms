@@ -216,7 +216,18 @@ function Shell({ children, brand }) {
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--paper)', padding: 'calc(18px + var(--sat)) 14px calc(20px + var(--sab))' }}>
       <div style={{ maxWidth: 560, margin: '0 auto' }}>{children}
-        {!brand?.hide_powered && <div style={{ textAlign: 'center', fontSize: '.72rem', color: 'var(--text-muted)', padding: '18px 0 6px' }}>Powered by Stellar Forge</div>}
+        {!brand?.hide_powered && (
+          <div style={{ textAlign: 'center', fontSize: '.72rem', padding: '18px 0 6px' }}>
+            <a
+              href="https://stellarforgetech.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--text-muted)', textDecoration: 'none' }}
+            >
+              Powered by <span style={{ textDecoration: 'underline' }}>Stellar Forge</span>
+            </a>
+          </div>
+        )}
       </div>
     </div>
   )

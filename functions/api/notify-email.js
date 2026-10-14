@@ -1,7 +1,7 @@
 // Sends the customer a professional status e-mail (shop name as sender, shop e-mail as reply-to).
 // Everything is read from the database here, so the browser cannot change the content.
 import { admin, esc, json, bearer, readJson, methodNotAllowed } from '../_shared/common.js'
-import { sendMail } from '../_shared/gmail.js'
+import { sendBrevoMail } from '../_shared/brevo.js'
 import { mergeSettings, stageLabel } from '../../src/lib/orderUtils.js'
 
 const inr = (n) => 'Rs. ' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -66,7 +66,7 @@ export async function onRequestPost({ request, env }) {
   </table></td></tr></table></body></html>`
 
   try {
-    await sendMail(env, { to: o.customer_email, subject: `Order ${no}: ${label} · ${shop.name}`, html, fromName: shop.name, replyTo: shop.email })
+    await sendBrevoMail(env, { to: o.customer_email, subject: `Order ${no}: ${label} · ${shop.name}`, html, fromName: shop.name, replyTo: shop.email })
   } catch (e) { console.error('notify email failed', e.message); return json({ error: 'Email could not be sent. Please try again.' }, 502) }
   return json({ ok: true })
 }

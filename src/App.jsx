@@ -14,6 +14,7 @@ import ProductsPage from './pages/ProductsPage'
 import CustomersPage from './pages/CustomersPage'
 import TrackPage from './pages/TrackPage'
 import ConnectPrinterPage from './pages/ConnectPrinterPage'
+import BillingPage from './pages/BillingPage'
 
 function LoadingScreen() {
   return (
@@ -44,7 +45,7 @@ const link = ({ isActive }) => `nav-link ${isActive ? 'active' : ''}`
 function Nav() {
   const { pathname } = useLocation()
   const { user, signOut } = useAuth()
-  const { shop, role } = useShop()
+  const { shop, role, isOwner } = useShop()
   if (pathname.startsWith('/track') || !shop || shop.status !== 'approved') return null
   const displayName = user?.email?.split('@')[0] ?? ''
   return (
@@ -59,6 +60,7 @@ function Nav() {
         <NavLink to="/orders/new" className={link}>➕ New Order</NavLink>
         <NavLink to="/products" className={link}>Products</NavLink>
         <NavLink to="/customers" className={link}>Customers</NavLink>
+        {isOwner && <NavLink to="/billing" className={link}>Billing</NavLink>}
         <NavLink to="/settings" className={link}>Settings</NavLink>
         <div style={{ display: 'flex', alignItems: 'center', marginLeft: 6, paddingLeft: 10, borderLeft: '1px solid rgba(255,255,255,0.12)', gap: 6 }}>
           <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>
@@ -104,6 +106,7 @@ function AppShell() {
         <Route path="/products" element={<ProtectedRoute><ProductsPage /></ProtectedRoute>} />
         <Route path="/customers" element={<ProtectedRoute><CustomersPage /></ProtectedRoute>} />
         <Route path="/connect-printer" element={<ProtectedRoute><ConnectPrinterPage /></ProtectedRoute>} />
+        <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

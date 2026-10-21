@@ -6,8 +6,8 @@ import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../components/Toast'
 import PlanCard from '../components/PlanCard'
 import { logoUrl } from '../lib/shop'
-import { contactUrl, upgradeUrl } from '../lib/plans'
-import { CORE_KEYS, MAX_EXTRA_STAGES, normStages } from '../lib/orderUtils'
+import { contactUrl, upgradeUrl } from '../lib/planHelper'
+import { CORE_KEYS, normStages } from '../lib/orderUtils'
 
 const SHOP_KEYS = ['name', 'tagline', 'address', 'mobile', 'whatsapp', 'gst_no', 'website', 'thank_you']
 const FIELD_LABELS = [['category', 'Category'], ['description', 'Description'], ['unit', 'Unit'], ['tax', 'Tax (GST)'], ['freight', 'Freight / delivery charges'], ['notes', 'Order notes']]
@@ -23,9 +23,10 @@ function resizeLogo(file, max = 400) {
 }
 
 export default function SettingsPage() {
-  const { shop, settings, canWrite, isPro, isPaidPro, hasExpense, isOwner, isStaff, role, reload } = useShop()
+  const { shop, settings, canWrite, isPro, plan, can, hasExpense, isOwner, isStaff, role, reload } = useShop()
   const { user } = useAuth()
   const toast = useToast()
+  const maxExtraStages = can('customStages') ? 3 : 0 // Free/Basic keep 5 default stages (0 extra); Pro up to 8 (5 + 3 extra)
   const [sf, setSf] = useState(() => Object.fromEntries(SHOP_KEYS.map(k => [k, shop?.[k] ?? ''])))
   const [paper, setPaper] = useState(shop?.paper_width || 58)
   const [s, setS] = useState(() => ({
@@ -141,7 +142,8 @@ export default function SettingsPage() {
     const e2 = (await supabase.from('order_settings').upsert({
       shop_id: shop.id, stages, category_label: s.category_label.trim() || 'Category', notify_channel: s.notify_channel, fields: s.fields, tax: s.tax,
       printer_mode: s.printer_mode, order_prefix: s.order_prefix.trim().toUpperCase(),
-      ...(isPro ? { custom_url: s.custom_url.trim() || null, brand_color: s.brand_color.trim() || null, hide_powered: s.hide_powered } : {}),
+      ...(can('branding') ? { brand_color: s.brand_color.trim() || null, hide_powered: s.hide_powered } : {}),
+      ...(can('customDomain') ? { custom_url: s.custom_url.trim() || null } : {}),
       updated_at: new Date().toISOString(),
     }, { onConflict: 'shop_id' })).error
     setBusy(false)
@@ -179,33 +181,33 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {isOwner && !isPaidPro && (
+      {isOwner && !can('staffLogins') && (
         <div className="card" style={{ marginBottom: 14 }}>
           <div className="card-header" style={{ marginBottom: 8 }}>
             <div>
-              <div className="section-title">Staff Accounts</div>
-              <div className="text-muted" style={{ fontSize: '.78rem' }}>1 Owner (You) + up to 2 Staff logins for taking orders</div>
+              <div className="section-title">Staff Logins</div>
+              <div className="text-muted" style={{ fontSize: '.78rem' }}>Multi-user role access for counter and order management</div>
             </div>
-            <span className="badge badge-accent">PRO</span>
+            <span className="badge badge-accent">PRO FEATURE</span>
           </div>
           <div className="empty-state" style={{ padding: '16px 12px' }}>
             <div className="empty-state-text" style={{ marginBottom: 12 }}>
-              Staff accounts are an exclusive Pro feature (available on paid Pro plan). Add up to 2 team members to take orders without sharing your owner credentials.
+              Staff logins are available on the Pro plan. Add your team members to take orders without sharing your owner password.
             </div>
             <a
-              className="btn btn-primary btn-sm"
-              href={upgradeUrl(shop, user, false, 'pro')}
+              className="btn btn-dark btn-sm"
+              href={contactUrl('Staff logins (Orders Pro)', shop, user)}
               target="_blank"
               rel="noopener noreferrer"
               style={{ textDecoration: 'none', display: 'inline-block' }}
             >
-              ⭐ Upgrade to Pro to add staff
+              💬 Contact us on WhatsApp for Pro
             </a>
           </div>
         </div>
       )}
 
-      {isOwner && isPaidPro && (
+      {isOwner && can('staffLogins') && (
         <div className="card" style={{ marginBottom: 14 }}>
           <div className="card-header" style={{ marginBottom: 8 }}>
             <div>
@@ -267,14 +269,24 @@ export default function SettingsPage() {
           {logo && <img src={logo} alt="" style={{ height: 60, display: 'block', marginBottom: 8 }} />}
           <input type="file" accept="image/*" onChange={upload} disabled={!canWrite || isStaff} /></div>
 
-        <H sub="Rename them to suit your shop (for example: Order placed, Packing, Out for delivery). You can add up to 2 more stages between Processing and Ready.">Order statuses</H>
-        {[['received', '1'], ['processing', '2']].map(([k, n]) => <div className="form-group" key={k}><label className="form-label">Status {n}</label><input className="form-input" maxLength={30} value={core[k]} onChange={e => setCore({ ...core, [k]: e.target.value })} disabled={isStaff} /></div>)}
+        <H sub={can('customStages') ? "Rename them to suit your shop. You can add up to 3 more stages (max 8 stages total)." : "Default 5 order stages. Customizing and adding stages (up to 8) is a Pro feature."}>
+          Order statuses {!can('customStages') && <span className="pro-tag">PRO</span>}
+        </H>
+        {[['received', '1'], ['processing', '2']].map(([k, n]) => <div className="form-group" key={k}><label className="form-label">Status {n}</label><input className="form-input" maxLength={30} value={core[k]} onChange={e => setCore({ ...core, [k]: e.target.value })} disabled={isStaff || !can('customStages')} /></div>)}
         {extras.map((x, i) => (
           <div className="form-group" key={x.key}><label className="form-label">Extra status {i + 1}</label>
-            <div className="flex gap-2"><input className="form-input" maxLength={30} placeholder="e.g. Packing" value={x.label} onChange={e => setExtras(extras.map(y => y.key === x.key ? { ...y, label: e.target.value } : y))} disabled={isStaff} />
-              {!isStaff && <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={() => confirm('Remove this status? Orders in it move back to Processing.') && setExtras(extras.filter(y => y.key !== x.key))}>✕</button>}</div></div>))}
-        {extras.length < MAX_EXTRA_STAGES && !isStaff && <button className="btn btn-secondary btn-sm" style={{ marginBottom: 12 }} onClick={addExtra}>+ Add a status after Processing</button>}
-        {[['ready', '3'], ['delivered', '4'], ['returned', '5']].map(([k, n]) => <div className="form-group" key={k}><label className="form-label">Status {n + (extras.length ? ` (+${extras.length})` : '')}</label><input className="form-input" maxLength={30} value={core[k]} onChange={e => setCore({ ...core, [k]: e.target.value })} disabled={isStaff} /></div>)}
+            <div className="flex gap-2"><input className="form-input" maxLength={30} placeholder="e.g. Packing" value={x.label} onChange={e => setExtras(extras.map(y => y.key === x.key ? { ...y, label: e.target.value } : y))} disabled={isStaff || !can('customStages')} />
+              {!isStaff && can('customStages') && <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={() => confirm('Remove this status? Orders in it move back to Processing.') && setExtras(extras.filter(y => y.key !== x.key))}>✕</button>}</div></div>))}
+        {extras.length < maxExtraStages && !isStaff && can('customStages') && <button className="btn btn-secondary btn-sm" style={{ marginBottom: 12 }} onClick={addExtra}>+ Add a status after Processing</button>}
+        {!can('customStages') && (
+          <div style={{ fontSize: '.78rem', color: 'var(--text-muted)', marginBottom: 12 }}>
+            Custom stages (rename, add up to 8 stages, reorder) is a Pro feature.{' '}
+            <a href={contactUrl('Custom stages (Orders Pro)', shop, user)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--teal-dark)', fontWeight: 600 }}>
+              Contact us on WhatsApp ↗
+            </a>
+          </div>
+        )}
+        {[['ready', '3'], ['delivered', '4'], ['returned', '5']].map(([k, n]) => <div className="form-group" key={k}><label className="form-label">Status {n + (extras.length ? ` (+${extras.length})` : '')}</label><input className="form-input" maxLength={30} value={core[k]} onChange={e => setCore({ ...core, [k]: e.target.value })} disabled={isStaff || !can('customStages')} /></div>)}
 
         <H>Names</H>
         <div className="grid2">
@@ -309,16 +321,59 @@ export default function SettingsPage() {
         </>}
 
         {isOwner && <>
-          <H>Pro features{!isPro && <span className="pro-tag">PRO</span>}</H>
-          <div className={isPro ? '' : 'lock'}>
-            <div className="form-group"><label className="form-label">Custom URL for tracking links</label><input className="form-input" placeholder="https://orders.yourshop.com" value={s.custom_url} onChange={e => setS({ ...s, custom_url: e.target.value })} /></div>
-            <div className="form-group"><label className="form-label">Brand colour (tracking page, email)</label>
-              <div className="flex gap-2"><input type="color" value={s.brand_color || '#00c9a7'} onChange={e => setS({ ...s, brand_color: e.target.value })} style={{ width: 52, height: 44, border: '1.5px solid var(--border)', borderRadius: 8 }} /><input className="form-input" placeholder="#00c9a7" value={s.brand_color} onChange={e => setS({ ...s, brand_color: e.target.value })} /></div></div>
-            <label className="toggle-row"><input type="checkbox" checked={s.hide_powered} onChange={e => setS({ ...s, hide_powered: e.target.checked })} />Hide “Powered by Stellar Forge”</label>
+          <H>Branding & Custom Domain{!can('branding') && <span className="pro-tag">PRO</span>}</H>
+          <div className={can('branding') ? '' : 'lock'}>
+            <div className="form-group">
+              <label className="form-label">Custom URL for tracking links</label>
+              <input
+                className="form-input"
+                placeholder="https://orders.yourshop.com"
+                value={s.custom_url}
+                onChange={e => setS({ ...s, custom_url: e.target.value })}
+                disabled={!can('customDomain')}
+              />
+              <div className="text-muted" style={{ fontSize: '.72rem', marginTop: 4 }}>
+                {can('customDomain') ? 'Admin-configured domain for your shop.' : 'Pro feature: Use your own shop domain for customer tracking links.'}
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Brand colour (tracking page, email)</label>
+              <div className="flex gap-2">
+                <input
+                  type="color"
+                  value={s.brand_color || '#00c9a7'}
+                  onChange={e => setS({ ...s, brand_color: e.target.value })}
+                  disabled={!can('branding')}
+                  style={{ width: 52, height: 44, border: '1.5px solid var(--border)', borderRadius: 8 }}
+                />
+                <input
+                  className="form-input"
+                  placeholder="#00c9a7"
+                  value={s.brand_color}
+                  onChange={e => setS({ ...s, brand_color: e.target.value })}
+                  disabled={!can('branding')}
+                />
+              </div>
+            </div>
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={s.hide_powered}
+                onChange={e => setS({ ...s, hide_powered: e.target.checked })}
+                disabled={!can('branding')}
+              />
+              Hide “Powered by Stellar Forge” (White label)
+            </label>
           </div>
           <div className="flex gap-2 mt-3" style={{ flexWrap: 'wrap' }}>
-            {!isPro && <a className="btn btn-dark btn-sm" target="_blank" rel="noopener noreferrer" href={contactUrl('Orders Pro plan', shop, user)}>⭐ Upgrade to Pro</a>}
-            <a className="btn btn-secondary btn-sm" target="_blank" rel="noopener noreferrer" href={contactUrl('dedicated infrastructure (Orders Pro)', shop, user)}>🏗️ Dedicated infra: contact us</a>
+            {!can('branding') && (
+              <a className="btn btn-dark btn-sm" target="_blank" rel="noopener noreferrer" href={contactUrl('Branding & Pro features', shop, user)}>
+                💬 Contact us on WhatsApp for Pro
+              </a>
+            )}
+            <a className="btn btn-secondary btn-sm" target="_blank" rel="noopener noreferrer" href={contactUrl('Dedicated infrastructure (Orders Pro)', shop, user)}>
+              🏗️ Dedicated infra: contact us
+            </a>
           </div>
         </>}
 

@@ -1,4 +1,4 @@
-// Write guard + shop helpers. When the trial ends the app becomes view-only.
+// Write guard + shop helpers.
 import { supabase } from './supabase'
 
 let canWriteNow = false
@@ -6,7 +6,7 @@ export const setLiveShop = (_shop, writable) => { canWriteNow = !!writable }
 
 export function guardWrite(what = 'This action') {
   if (canWriteNow) return true
-  alert(`${what} is unavailable: your trial has ended or the account is on hold. You can still view your orders. Contact Stellar Forge to continue.`)
+  alert(`${what} is unavailable: your account is on hold or pending approval. Contact Stellar Forge to continue.`)
   return false
 }
 

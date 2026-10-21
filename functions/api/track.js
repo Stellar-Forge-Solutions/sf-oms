@@ -10,14 +10,14 @@ export async function onRequestGet({ request, env }) {
   const { data: o } = await sb.from('orders').select('*').eq('token', t).maybeSingle()
   if (!o) return json({ error: 'Order not found' }, 404)
   const [{ data: shop }, { data: st }, { data: items }, { data: events }] = await Promise.all([
-    sb.from('shops').select('name,tagline,address,mobile,whatsapp,website,gst_no,thank_you,logo_path').eq('id', o.shop_id).single(),
+    sb.from('shops').select('name,tagline,address,mobile,whatsapp,website,gst_no,thank_you,logo_path,verified_badge').eq('id', o.shop_id).single(),
     sb.from('order_settings').select('*').eq('shop_id', o.shop_id).maybeSingle(),
     sb.from('order_items').select('name,category,description,unit,quantity,unit_price,tax_amt,line_total').eq('order_id', o.id).order('created_at'),
     sb.from('order_events').select('stage_key,created_at').eq('order_id', o.id).order('created_at'),
   ])
   const s = mergeSettings(st)
   return json({
-    shop: { name: shop.name, tagline: shop.tagline, address: shop.address, mobile: shop.mobile, whatsapp: shop.whatsapp, website: shop.website, gst_no: shop.gst_no, thank_you: shop.thank_you, logo: publicLogo(env, shop.logo_path) },
+    shop: { name: shop.name, tagline: shop.tagline, address: shop.address, mobile: shop.mobile, whatsapp: shop.whatsapp, website: shop.website, gst_no: shop.gst_no, thank_you: shop.thank_you, logo: publicLogo(env, shop.logo_path), verified_badge: !!shop.verified_badge },
     brand: { color: s.brand_color || null, hide_powered: !!s.hide_powered },
     stages: s.stages, category_label: s.category_label, fields: s.fields,
     order: {

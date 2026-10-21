@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useShop } from '../lib/ShopContext'
 import { useAuth } from '../lib/AuthContext'
@@ -8,12 +8,13 @@ import ItemSheet from '../components/ItemSheet'
 import { guardWrite, logoDataUrl } from '../lib/shop'
 import { buildBillPdf } from '../lib/billDoc'
 import { calcLine, calcOrder, orderRowTotals, itemRow, inr, r2, digits10, taxActive, PAY } from '../lib/orderUtils'
+import { upgradeUrl } from '../lib/planHelper'
 
 // One screen for both "new order" and "edit order". Fields shown depend on Settings.
 export default function OrderForm() {
   const { id } = useParams()
   const nav = useNavigate(), toast = useToast()
-  const { shop, settings } = useShop(), { user } = useAuth()
+  const { shop, settings, plan, monthlyUsage } = useShop(), { user } = useAuth()
   const f = settings.fields, tax = taxActive(settings)
   const [c, setC] = useState({ name: '', whatsapp: '', email: '' })
   const [items, setItems] = useState([])
@@ -30,6 +31,7 @@ export default function OrderForm() {
   const [billOption, setBillOption] = useState('none') // 'none' | 'generate' | 'upload'
   const [billFile, setBillFile] = useState(null)
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(!!id), [err, setErr] = useState('')
+  const [overageConfirmed, setOverageConfirmed] = useState(false)
 
   useEffect(() => {
     supabase.from('order_products').select('*').order('name').limit(1000).then(({ data }) => setProducts(data || []))
@@ -125,6 +127,9 @@ export default function OrderForm() {
 
   const save = async () => {
     setErr('')
+    if (!id && monthlyUsage?.isOverageBlocked) {
+      return setErr(`Monthly overage spending limit of ${inr(monthlyUsage.overageLimit)} reached. Increase your limit on the Billing page or upgrade your plan to create new orders.`)
+    }
     if (!c.name.trim()) return setErr('Customer name is required')
     if (c.whatsapp && digits10(c.whatsapp).length !== 10) return setErr('WhatsApp number should have 10 digits (or leave it empty)')
     if (c.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.email.trim())) return setErr('Email looks wrong (or leave it empty)')
@@ -282,6 +287,83 @@ export default function OrderForm() {
       <button className="btn btn-ghost btn-sm" onClick={() => nav(-1)} style={{ marginBottom: 12 }}>← Back</button>
       <h1 className="page-title">{id ? 'Edit order' : 'New order'}</h1>
       <p className="page-subtitle" style={{ marginBottom: 16 }}>{id ? 'Change customer, items or payment.' : `It will start in “${settings.stages[0].label}”.`}</p>
+
+      {/* 80% non-blocking inline warning for new orders */}
+      {!id && monthlyUsage?.isNearLimit && (
+        <div className="hint-box" style={{ background: '#fffbeb', borderColor: '#fde68a', color: '#92400e', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <b>Approaching included orders limit:</b> You have used {monthlyUsage.used} of {monthlyUsage.included} orders this month ({monthlyUsage.pctUsed}%).
+            </div>
+            <Link to="/billing" className="btn btn-sm btn-secondary" style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              View plans / Upgrade
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Overage spending limit blocked state */}
+      {!id && monthlyUsage?.isOverageBlocked && (
+        <div className="card" style={{ background: '#fef2f2', borderColor: '#fca5a5', marginBottom: 16, textAlign: 'center', padding: 24 }}>
+          <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>⚠️</div>
+          <h3 style={{ color: '#991b1b', margin: '0 0 8px' }}>Monthly Overage Limit Reached</h3>
+          <p style={{ color: '#7f1d1d', fontSize: '.88rem', lineHeight: 1.5, maxWidth: 500, margin: '0 auto 16px' }}>
+            You have reached your shop's monthly overage spending limit of <b>{inr(monthlyUsage.overageLimit)}</b>.
+            New order creation is currently paused to prevent extra charges. Your existing orders remain viewable and editable.
+          </p>
+          <div className="flex gap-2" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link to="/billing" className="btn btn-primary btn-sm" style={{ textDecoration: 'none' }}>
+              Increase Limit or Upgrade Plan
+            </Link>
+            <button className="btn btn-ghost btn-sm" onClick={() => nav('/orders')}>
+              Go to Orders
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 100% Inline confirmation screen before creating an overage order */}
+      {!id && monthlyUsage?.isAtLimit && !monthlyUsage?.isOverageBlocked && !overageConfirmed && (
+        <div className="card" style={{ background: '#fffbeb', borderColor: '#fcd34d', marginBottom: 16, padding: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ fontSize: '1.4rem' }}>ℹ️</div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ margin: '0 0 6px', color: '#78350f', fontSize: '1rem' }}>
+                You've used all {monthlyUsage.included} included orders this month
+              </h3>
+              <p style={{ margin: '0 0 14px', color: '#92400e', fontSize: '.85rem', lineHeight: 1.5 }}>
+                Extra orders cost <b>₹0.30 each</b> (metered overage) and will be billed at the end of the month.
+                You can also upgrade to <b>Basic (₹29/month)</b> for 300 orders/month and an ad-free experience.
+              </p>
+              <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setOverageConfirmed(true)}
+                >
+                  Continue creating order (₹0.30)
+                </button>
+                <a
+                  className="btn btn-secondary btn-sm"
+                  href={upgradeUrl(shop, user, 'basic')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: 'none' }}
+                >
+                  ⭐ Upgrade to Basic (₹29/mo)
+                </a>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => nav(-1)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="section-title" style={{ marginBottom: 12 }}>Customer</div>
@@ -490,7 +572,13 @@ export default function OrderForm() {
       )}
 
       {err && <div className="err-text" style={{ marginBottom: 10 }}>✕ {err}</div>}
-      <button className="btn btn-primary btn-full btn-lg" onClick={save} disabled={busy}>{busy ? 'Saving…' : id ? 'Save changes' : 'Create order'}</button>
+      <button
+        className="btn btn-primary btn-full btn-lg"
+        onClick={save}
+        disabled={busy || (!id && monthlyUsage?.isOverageBlocked) || (!id && monthlyUsage?.isAtLimit && !overageConfirmed)}
+      >
+        {busy ? 'Saving…' : id ? 'Save changes' : (!id && monthlyUsage?.isAtLimit && !overageConfirmed) ? 'Confirm Overage to Create' : 'Create order'}
+      </button>
 
       {sheet && <ItemSheet item={sheet.item} products={products} settings={settings} onSave={setItem} onClose={() => setSheet(null)} />}
     </div>

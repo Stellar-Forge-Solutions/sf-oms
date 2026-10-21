@@ -3,14 +3,17 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useShop } from '../lib/ShopContext'
 import PlanCard from '../components/PlanCard'
+import AdBanner from '../components/AdBanner'
 import { StageBadge, PayBadge } from '../components/Badges'
 import { inr, orderNo, fmtDate, rangeFor, stageColor, r2 } from '../lib/orderUtils'
+import { getMonthBounds } from '../lib/planHelper'
 
 export default function HomePage() {
-  const { shop, settings, isOwner, isStaff } = useShop(), nav = useNavigate()
+  const { shop, settings, isOwner, isStaff, plan, monthlyUsage } = useShop(), nav = useNavigate()
   const [period, setPeriod] = useState('month')
   const [rows, setRows] = useState([]), [recent, setRecent] = useState([]), [loading, setLoading] = useState(true)
   const stages = settings.stages
+  const { monthLabel } = getMonthBounds()
 
   useEffect(() => {
     setLoading(true)
@@ -27,12 +30,42 @@ export default function HomePage() {
   const collected = r2(live.reduce((t, o) => t + Number(o.paid || 0), 0))
   const returnedCount = by.returned?.n || 0
 
+  const isUnlimited = plan.includedOrders === Infinity
+  const barColor = monthlyUsage.isAtLimit ? 'var(--danger, #ef4444)' : monthlyUsage.isNearLimit ? 'var(--warning, #f59e0b)' : 'var(--teal, #00c9a7)'
+
   return (
     <div className="page-wide">
       <div className="page-head">
         <div><h1 className="page-title">Hello, {(shop?.owner_name || shop?.name || '').split(' ')[0]} 👋</h1><p className="page-subtitle">Here is how your orders are doing.</p></div>
         <Link to="/orders/new" className="btn btn-primary btn-lg">+ New order</Link>
       </div>
+
+      {/* Monthly Orders Usage Widget (for Free and Basic plans) */}
+      {isOwner && !isUnlimited && (
+        <div className="card" style={{ marginBottom: 14, padding: '14px 18px', background: '#fff' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: '.84rem', fontWeight: 700, color: 'var(--ink)' }}>
+              {monthlyUsage.used} of {monthlyUsage.included} orders used this month ({monthLabel})
+            </span>
+            <Link to="/billing" style={{ fontSize: '.78rem', color: 'var(--teal-dark)', fontWeight: 600, textDecoration: 'none' }}>
+              Usage & Billing →
+            </Link>
+          </div>
+          <div style={{ width: '100%', height: 8, background: 'var(--border)', borderRadius: 99, overflow: 'hidden', margin: '4px 0 6px' }}>
+            <div style={{ width: `${monthlyUsage.pctUsed}%`, height: '100%', background: barColor, transition: 'width 0.4s ease' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.74rem', color: 'var(--text-muted)' }}>
+            <span>{monthlyUsage.remainingIncluded} included orders remaining</span>
+            {monthlyUsage.overageOrders > 0 ? (
+              <span style={{ color: 'var(--warning)', fontWeight: 600 }}>
+                {monthlyUsage.overageOrders} extra orders ({inr(monthlyUsage.overageAmount)})
+              </span>
+            ) : (
+              <span>Plan: {plan.name}</span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="chips" style={{ marginBottom: 14 }}>
         {[['today', 'Today'], ['month', 'This month'], ['all', 'All time']].map(([k, l]) => <button key={k} className={`chip ${period === k ? 'on' : ''}`} onClick={() => setPeriod(k)}>{l}</button>)}
@@ -79,6 +112,12 @@ export default function HomePage() {
           </Link>))}
       </div>
       <PlanCard compact />
+
+      {/* AdSense Unit (Free plan only, rendered below content after real data loads) */}
+      {!loading && rows.length > 0 && (
+        <AdBanner slotId="dashboard_home" pageName="Dashboard Home" />
+      )}
     </div>
   )
 }
+

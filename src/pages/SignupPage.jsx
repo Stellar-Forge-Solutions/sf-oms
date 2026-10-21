@@ -30,7 +30,7 @@ export default function SignupPage() {
     <div style={{ minHeight: '100vh', background: 'var(--ink)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 24 }}>
       <img src="/sf-mark-light.png" alt="" style={{ width: 64, marginTop: 12 }} />
       <h1 style={{ color: 'var(--white)', margin: '8px 0 2px' }}>Stellar Forge</h1>
-      <div style={{ color: 'var(--teal)', fontSize: '0.78rem', letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 20 }}>Start your 15-day free trial</div>
+      <div style={{ color: 'var(--teal)', fontSize: '0.78rem', letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 20 }}>Free plan · 100 orders included every month</div>
       <form onSubmit={submit} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, padding: 28, width: '100%', maxWidth: 400 }}>
         {field('Shop name', 'name', { required: true, maxLength: 80 })}
         {field('Owner name', 'owner_name', { required: true, maxLength: 80 })}
@@ -45,7 +45,7 @@ export default function SignupPage() {
         <input name="company_site" value={f.company_site} onChange={set('company_site')} tabIndex={-1} autoComplete="off" style={{ position: 'absolute', left: '-9999px' }} aria-hidden="true" />
         {err && <div style={{ color: '#ff8a8a', margin: '8px 0' }}>{err}</div>}
         <button className="btn btn-primary btn-full btn-lg" disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
-        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem' }}>We review every new shop within 1 hour (9 am – 9 pm IST) and message you on WhatsApp. Your trial starts when you are approved.</p>
+        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem' }}>We review every new shop within 1 hour (9 am – 9 pm IST) and message you on WhatsApp. Your free plan activates when approved.</p>
       </form>
       <Link to="/login" style={{ color: 'rgba(255,255,255,0.5)', marginTop: 16, fontSize: '0.85rem' }}>Already have an account? Sign in</Link>
       <div style={{ marginTop: 24, fontSize: '0.75rem' }}>

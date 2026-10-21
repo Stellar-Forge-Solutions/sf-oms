@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useShop } from '../lib/ShopContext'
 import { useToast } from '../components/Toast'
 import { StageBadge, PayBadge } from '../components/Badges'
+import AdBanner from '../components/AdBanner'
 import { exportOrders } from '../lib/exportUtils'
 import { orderNo, inr, fmtDate, rangeFor, fyOptions, fyLabel, yearOptions, currentFY, PAY, r2, billUrl } from '../lib/orderUtils'
 
@@ -138,6 +139,12 @@ export default function OrdersPage() {
               )}
             </td>
           </tr>))}</tbody></table></div></div>}
+
+      {/* AdSense Unit (Free plan only, below the table/cards, never between rows) */}
+      {!loading && shown.length > 0 && (
+        <AdBanner slotId="orders_list" pageName="Orders List" />
+      )}
     </div>
   )
 }
+

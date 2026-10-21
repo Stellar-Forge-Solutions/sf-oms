@@ -30,7 +30,28 @@ export default function TrackPage() {
       {/* ── Shop Header ── */}
       <div style={{ textAlign: 'center', marginBottom: 20 }}>
         {shop.logo && <img src={shop.logo} alt="" style={{ height: 56, marginBottom: 8, objectFit: 'contain' }} />}
-        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--ink)' }}>{shop.name}</div>
+        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--ink)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <span>{shop.name}</span>
+          {shop.verified_badge && (
+            <span
+              title="Verified Shop"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#00c9a7',
+                color: '#fff',
+                borderRadius: '50%',
+                width: 18,
+                height: 18,
+                fontSize: '11px',
+                fontWeight: 700,
+              }}
+            >
+              ✓
+            </span>
+          )}
+        </div>
         {shop.tagline && <div className="text-muted" style={{ fontSize: '.84rem', marginTop: 2 }}>{shop.tagline}</div>}
       </div>
 

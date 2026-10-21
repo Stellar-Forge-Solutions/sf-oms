@@ -1,0 +1,96 @@
+// Central plan definitions and AdSense configuration.
+// Source of truth for limits, prices, features, and slot IDs.
+
+export const ADSENSE_CONFIG = {
+  publisherId: 'ca-pub-4980923603937746',
+  scriptUrl: 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4980923603937746',
+  slots: {
+    dashboard_home: '3069231988',
+    orders_list: '6169293180',
+    sales_summary: '4856211518',
+  },
+}
+
+export const UPGRADE_WHATSAPP = '919270243271'
+
+export const PLANS = {
+  free: {
+    key: 'free',
+    name: 'Free',
+    priceMonthly: 0,
+    priceYearly: 0,
+    includedOrders: 100,
+    overageRate: 0.30,
+    ads: true,
+    staffLogins: false,
+    branding: false,
+    customStages: false,
+    customDomain: false,
+    verifiedBadge: false,
+    maxStages: 5,
+    maxStaff: 0,
+    description: 'Perfect for getting started with small order volume.',
+    features: [
+      '100 orders per month included',
+      '₹0.30 per extra order (metered overage)',
+      '1 owner login',
+      'Order creation & 5 standard stages',
+      'WhatsApp tracking link & payment status tracking',
+      'Tax & freight calculation',
+      'Standard Stellar Forge tracking page',
+      'Thermal & regular printer support',
+    ],
+  },
+  basic: {
+    key: 'basic',
+    name: 'Basic',
+    priceMonthly: 29,
+    priceYearly: 249,
+    includedOrders: 300,
+    overageRate: 0.30,
+    ads: false,
+    staffLogins: false,
+    branding: false,
+    customStages: false,
+    customDomain: false,
+    verifiedBadge: false,
+    maxStages: 5,
+    maxStaff: 0,
+    description: 'For active shops that want ad-free experience & more orders.',
+    features: [
+      'Everything in Free',
+      '300 orders per month included',
+      'No ads anywhere in the dashboard',
+      '₹0.30 per extra order over 300',
+      'Excel import, CSV / Excel / PDF export',
+    ],
+  },
+  pro: {
+    key: 'pro',
+    name: 'Pro',
+    priceMonthly: 199,
+    priceYearly: 1990,
+    includedOrders: Infinity, // or custom limit set by admin
+    overageRate: 0.00,
+    ads: false,
+    staffLogins: true,
+    branding: true,
+    customStages: true,
+    customDomain: true,
+    verifiedBadge: true,
+    maxStages: 8,
+    maxStaff: 5,
+    description: 'Customized for growing businesses with staff and branding.',
+    features: [
+      'Everything in Basic',
+      'Unlimited orders (or customized high limit)',
+      'No ads anywhere',
+      'Staff logins & multi-user role access',
+      'Shop branding on customer tracking page (logo, brand color)',
+      'Custom order stages (up to 8, rename & reorder)',
+      'Custom tracking domain (e.g. orders.yourshop.com)',
+      'Verified shop badge',
+      'Priority support built to your requirements',
+    ],
+  },
+}

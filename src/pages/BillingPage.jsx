@@ -1,21 +1,47 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useShop } from '../lib/ShopContext'
 import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../components/Toast'
 import { supabase } from '../lib/supabase'
 import { PLANS } from '../lib/plans.config'
 import { upgradeUrl, getMonthBounds } from '../lib/planHelper'
-import { fmtDate, inr } from '../lib/orderUtils'
+import { fmtDate, inr, orderNo } from '../lib/orderUtils'
+import { StageBadge } from '../components/Badges'
 
 export default function BillingPage() {
-  const { shop, plan, monthlyUsage, reload } = useShop()
+  const { shop, plan, monthlyUsage, settings, reload } = useShop()
   const { user } = useAuth()
   const toast = useToast()
   const [cycle, setCycle] = useState(shop?.billing_cycle || 'monthly')
   const [overageCap, setOverageCap] = useState(shop?.monthly_overage_limit !== undefined ? String(shop.monthly_overage_limit) : '100')
   const [savingLimit, setSavingLimit] = useState(false)
 
-  const { monthLabel } = getMonthBounds()
+  // Monthly orders breakdown list
+  const [monthlyOrders, setMonthlyOrders] = useState([])
+  const [ordersLoading, setOrdersLoading] = useState(false)
+  const [filterQuery, setFilterQuery] = useState('')
+  const [showAllOrders, setShowAllOrders] = useState(false)
+
+  const { from, to, monthLabel } = getMonthBounds()
+
+  useEffect(() => {
+    if (!shop?.id) return
+    setOrdersLoading(true)
+    supabase
+      .from('orders')
+      .select('*')
+      .eq('shop_id', shop.id)
+      .gte('created_at', from.toISOString())
+      .lt('created_at', to.toISOString())
+      .order('created_at', { ascending: true }) // First created gets included quota
+      .then(({ data, error }) => {
+        setOrdersLoading(false)
+        if (!error && data) {
+          setMonthlyOrders(data)
+        }
+      })
+  }, [shop?.id, from, to])
 
   const saveOverageLimit = async () => {
     const val = Number(overageCap)
@@ -105,6 +131,145 @@ export default function BillingPage() {
                 </div>
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Monthly Order Entries Breakdown Table */}
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '.95rem' }}>Orders & Overage Breakdown ({monthLabel})</div>
+              <div className="text-muted" style={{ fontSize: '.8rem' }}>
+                {monthlyOrders.length === 0
+                  ? 'No orders created yet this month.'
+                  : `Showing all ${monthlyOrders.length} order${monthlyOrders.length === 1 ? '' : 's'} created in ${monthLabel}. First ${plan.includedOrders === Infinity ? 'all' : plan.includedOrders} orders are included.`}
+              </div>
+            </div>
+            {monthlyOrders.length > 5 && (
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowAllOrders(!showAllOrders)}
+                style={{ fontSize: '.78rem' }}
+              >
+                {showAllOrders ? 'Collapse list' : `View all (${monthlyOrders.length})`}
+              </button>
+            )}
+          </div>
+
+          {monthlyOrders.length > 0 && (
+            <>
+              {monthlyOrders.length > 6 && (
+                <input
+                  className="form-input"
+                  placeholder="Filter by customer, order #…"
+                  value={filterQuery}
+                  onChange={e => setFilterQuery(e.target.value)}
+                  style={{ marginBottom: 10, fontSize: '.84rem', padding: '6px 10px' }}
+                />
+              )}
+
+              <div className="table-wrap" style={{ maxHeight: showAllOrders ? '420px' : '260px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '45px' }}>#</th>
+                      <th>Order</th>
+                      <th>Date & Time</th>
+                      <th>Customer</th>
+                      <th style={{ textAlign: 'right' }}>Total</th>
+                      <th style={{ textAlign: 'right' }}>Plan Charge</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ordersLoading ? (
+                      <tr><td colSpan={6} style={{ textAlign: 'center', padding: 18 }} className="text-muted">Loading orders…</td></tr>
+                    ) : (
+                      monthlyOrders
+                        .filter(o => {
+                          if (!filterQuery.trim()) return true
+                          const q = filterQuery.toLowerCase()
+                          return o.customer_name?.toLowerCase().includes(q) || String(o.order_no).includes(q)
+                        })
+                        .slice(0, showAllOrders ? undefined : 10)
+                        .map((o, idx) => {
+                          const orderIndex = idx + 1
+                          const isOverage = !isUnlimited && orderIndex > plan.includedOrders
+                          return (
+                            <tr key={o.id} style={{ background: isOverage ? '#fff1f2' : 'transparent' }}>
+                              <td className="mono text-muted" style={{ fontSize: '.75rem' }}>{orderIndex}</td>
+                              <td>
+                                <Link to={`/orders/${o.id}`} style={{ fontWeight: 600, color: 'var(--brand, #00c9a7)', textDecoration: 'none' }}>
+                                  {orderNo(o, settings)}
+                                </Link>
+                              </td>
+                              <td style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>
+                                {fmtDate(o.created_at)}
+                              </td>
+                              <td>
+                                <div style={{ fontWeight: 500, fontSize: '.84rem' }}>{o.customer_name}</div>
+                              </td>
+                              <td style={{ textAlign: 'right', fontWeight: 600, fontSize: '.84rem' }}>
+                                {inr(o.total)}
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                {isOverage ? (
+                                  <span
+                                    className="badge"
+                                    style={{ background: '#fee2e2', color: '#991b1b', fontSize: '.72rem', fontWeight: 700 }}
+                                    title="Metered overage order"
+                                  >
+                                    +₹0.30 overage
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="badge"
+                                    style={{ background: 'var(--teal-glow, #e6fffa)', color: 'var(--teal-dark, #0d9488)', fontSize: '.72rem' }}
+                                  >
+                                    Included (₹0)
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {!showAllOrders && monthlyOrders.length > 10 && (
+                <div style={{ textAlign: 'center', marginTop: 8 }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ fontSize: '.78rem', color: 'var(--teal-dark)' }}
+                    onClick={() => setShowAllOrders(true)}
+                  >
+                    + Show {monthlyOrders.length - 10} more orders
+                  </button>
+                </div>
+              )}
+
+              {/* Total Overage Incurred Summary */}
+              {monthlyUsage.overageOrders > 0 && (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  background: '#fef2f2',
+                  border: '1px solid #fca5a5',
+                  borderRadius: 8,
+                  padding: '10px 14px',
+                  marginTop: 10,
+                }}>
+                  <span style={{ fontSize: '.84rem', color: '#991b1b', fontWeight: 600 }}>
+                    Total overage accumulated this month ({monthlyUsage.overageOrders} extra orders):
+                  </span>
+                  <span style={{ fontSize: '1rem', color: '#991b1b', fontWeight: 800 }}>
+                    {inr(monthlyUsage.overageAmount)}
+                  </span>
+                </div>
+              )}
+            </>
           )}
         </div>
 

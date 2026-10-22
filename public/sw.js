@@ -1,7 +1,12 @@
-const CACHE = 'sf-orders-v1'
+const CACHE = 'sf-orders-v2'
 
 // Cache the app shell on install
 self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE).then(cache => {
+      return cache.addAll(['/', '/index.html', '/manifest.json', '/icon-192.png']).catch(() => {})
+    })
+  )
   self.skipWaiting()
 })
 
@@ -17,7 +22,7 @@ self.addEventListener('activate', e => {
 
 // Network-first strategy: always try network, fall back to cache
 self.addEventListener('fetch', e => {
-  // Only handle GET requests, skip Supabase API calls
+  // Only handle GET requests, skip Supabase API calls and backend /api/ endpoints
   if (e.request.method !== 'GET') return
   if (e.request.url.includes('supabase.co') || e.request.url.includes('/api/')) return
 
@@ -31,6 +36,23 @@ self.addEventListener('fetch', e => {
         }
         return res
       })
-      .catch(() => caches.match(e.request))
+      .catch(async () => {
+        // Try exact request match first
+        const matched = await caches.match(e.request)
+        if (matched) return matched
+
+        // For navigation (HTML page requests like /login, /orders, etc.), return the cached SPA shell
+        if (e.request.mode === 'navigate') {
+          const shell = await caches.match('/index.html') || await caches.match('/')
+          if (shell) return shell
+        }
+
+        // Always guarantee a valid Response object to prevent "TypeError: Failed to convert value to 'Response'"
+        return new Response('Network error occurred. Please check your connection.', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        })
+      })
   )
 })

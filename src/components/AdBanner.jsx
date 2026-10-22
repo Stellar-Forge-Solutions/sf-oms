@@ -46,11 +46,7 @@ export default function AdBanner({ slotId, pageName = 'Page' }) {
   }, [])
 
   useEffect(() => {
-    if (!isVisible || pushedRef.current) return
-
-    if (!adsEnabled) {
-      return
-    }
+    if (!isVisible || pushedRef.current || !adsEnabled) return
 
     // Inject AdSense script once if not already present
     const existingScript = document.querySelector(`script[src*="${ADSENSE_CONFIG.publisherId}"]`)
@@ -62,14 +58,35 @@ export default function AdBanner({ slotId, pageName = 'Page' }) {
       document.head.appendChild(script)
     }
 
-    try {
-      // Guard against double push in React StrictMode
-      if (typeof window !== 'undefined') {
-        ;(window.adsbygoogle = window.adsbygoogle || []).push({})
-        pushedRef.current = true
+    // Function to safely push ad only when container has a measured positive width
+    let animationFrameId
+    let attempts = 0
+    const maxAttempts = 50 // Try up to ~800ms for layout to settle
+
+    const tryPushAd = () => {
+      if (pushedRef.current) return
+      const containerWidth = adRef.current ? adRef.current.offsetWidth : 0
+
+      if (containerWidth > 0) {
+        try {
+          if (typeof window !== 'undefined') {
+            ;(window.adsbygoogle = window.adsbygoogle || []).push({})
+            pushedRef.current = true
+          }
+        } catch (e) {
+          console.warn('AdSense push notice:', e)
+        }
+      } else if (attempts < maxAttempts) {
+        attempts++
+        animationFrameId = requestAnimationFrame(tryPushAd)
       }
-    } catch (e) {
-      console.warn('AdSense push notice:', e)
+    }
+
+    // Give DOM a frame to compute styles & dimensions
+    animationFrameId = requestAnimationFrame(tryPushAd)
+
+    return () => {
+      if (animationFrameId) cancelAnimationFrame(animationFrameId)
     }
   }, [isVisible, adsEnabled])
 
@@ -125,7 +142,7 @@ export default function AdBanner({ slotId, pageName = 'Page' }) {
           isVisible && (
             <ins
               className="adsbygoogle"
-              style={{ display: 'block', minHeight: 90 }}
+              style={{ display: 'block', width: '100%', minWidth: 280, minHeight: 90 }}
               data-ad-client={ADSENSE_CONFIG.publisherId}
               data-ad-slot={actualSlot}
               data-ad-format="horizontal"

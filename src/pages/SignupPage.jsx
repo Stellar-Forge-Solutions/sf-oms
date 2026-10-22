@@ -45,7 +45,7 @@ export default function SignupPage() {
         <input name="company_site" value={f.company_site} onChange={set('company_site')} tabIndex={-1} autoComplete="off" style={{ position: 'absolute', left: '-9999px' }} aria-hidden="true" />
         {err && <div style={{ color: '#ff8a8a', margin: '8px 0' }}>{err}</div>}
         <button className="btn btn-primary btn-full btn-lg" disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
-        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem' }}>We review every new shop within 1 hour (9 am – 9 pm IST) and message you on WhatsApp. Your free plan activates when approved.</p>
+        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem' }}>Early access is open — you can start creating orders immediately. If early access slots are full, we review your shop within 1 hour (9 am – 9 pm IST) and message you on WhatsApp.</p>
       </form>
       <Link to="/login" style={{ color: 'rgba(255,255,255,0.5)', marginTop: 16, fontSize: '0.85rem' }}>Already have an account? Sign in</Link>
       <div style={{ marginTop: 24, fontSize: '0.75rem' }}>

@@ -299,9 +299,18 @@ export default function SettingsPage() {
         {s.fields.tax && <div className="hint-box mt-3" style={{ borderStyle: 'solid' }}>
           <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>Which taxes do you charge, and at what percent?</div>
           {['cgst', 'sgst', 'igst'].map(k => (
-            <div className="toggle-row" key={k} style={{ borderBottom: 0 }}>
-              <input type="checkbox" checked={s.tax[k].on} onChange={e => setTax(k, { on: e.target.checked })} disabled={isStaff} /><span style={{ width: 52, fontWeight: 600 }}>{k.toUpperCase()}</span>
-              <input className="form-input" style={{ maxWidth: 110, padding: '8px 10px' }} type="number" inputMode="decimal" min="0" max="100" step="any" disabled={!s.tax[k].on || isStaff} value={s.tax[k].pct} onChange={e => setTax(k, { pct: e.target.value })} /><span>%</span>
+            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: 0 }}>
+              <input type="checkbox" checked={s.tax[k].on} onChange={e => setTax(k, { on: e.target.checked })} disabled={isStaff} />
+              <span style={{ width: 52, fontWeight: 600, color: 'var(--text)' }}>{k.toUpperCase()}</span>
+              <input
+                className="form-input"
+                style={{ width: 100, minWidth: 80, padding: '8px 12px', fontSize: '1rem', textAlign: 'center' }}
+                type="number" inputMode="decimal" min="0" max="100" step="any"
+                disabled={!s.tax[k].on || isStaff}
+                value={s.tax[k].pct}
+                onChange={e => setTax(k, { pct: e.target.value })}
+              />
+              <span style={{ color: 'var(--muted)', fontWeight: 500 }}>%</span>
             </div>))}
           <div style={{ fontSize: '.75rem', marginTop: 6 }}>Prices are taken as tax-exclusive; tax is added on top. A product’s own % (from Excel) overrides these.</div>
         </div>}

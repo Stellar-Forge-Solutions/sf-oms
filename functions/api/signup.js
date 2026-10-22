@@ -1,6 +1,9 @@
-// Self-signup: creates the auth user + a pending shop (no email code), then alerts both admins via Gmail.
+// Self-signup: creates the auth user + a pending (or auto-approved) shop, then alerts admins via Gmail.
+// First AUTO_APPROVE_LIMIT shops (by approved count) are auto-approved; 11th+ go to pending_review.
 import { admin, esc, json, readJson, methodNotAllowed } from '../_shared/common.js'
 import { sendMail } from '../_shared/gmail.js'
+
+const AUTO_APPROVE_LIMIT = 10
 
 const DISPOSABLE = new Set(['mailinator.com', 'guerrillamail.com', '10minutemail.com', 'tempmail.com', 'yopmail.com', 'trashmail.com', 'sharklasers.com', 'getnada.com'])
 const ten = (v) => String(v || '').replace(/\D/g, '').slice(-10)
@@ -37,36 +40,60 @@ export async function onRequestPost({ request, env }) {
 
   const sb = admin(env)
   const norm = normalizeEmail(email)
-  const [{ data: b1 }, { data: b2 }, { data: dup }] = await Promise.all([
+
+  // Check blocklist + duplicate, AND count already-approved orders shops (for auto-approve decision)
+  const [{ data: b1 }, { data: b2 }, { data: dup }, { count: approvedCount }] = await Promise.all([
     sb.from('blocklist').select('value').eq('kind', 'email').eq('value', norm).maybeSingle(),
     sb.from('blocklist').select('value').eq('kind', 'mobile').eq('value', mobile).maybeSingle(),
     sb.from('shops').select('id').eq('email_normalized', norm).maybeSingle(),
+    sb.from('shops').select('id', { count: 'exact', head: true }).eq('status', 'approved').eq('signup_product', 'orders'),
   ])
   if (b1 || b2) return json({ error: 'This account cannot be created. Please contact Stellar Forge.' }, 403)
   if (dup) return json({ error: 'This email is already registered with Stellar Forge. Please sign in: if your shop is already approved, you can start your free Orders trial there.' }, 409)
+
+  const shouldAutoApprove = (approvedCount || 0) < AUTO_APPROVE_LIMIT
+  const slotNum = (approvedCount || 0) + 1
 
   const { data: u, error: ue } = await sb.auth.admin.createUser({ email, password, email_confirm: true })
   if (ue) { const dupe = /regist|exist/i.test(ue.message); return json({ error: dupe ? 'This email is already registered with Stellar Forge. Please sign in: if your shop is already approved, you can start your free Orders trial there.' : 'Could not create account' }, dupe ? 409 : 500) }
 
   const due = reviewDue()
+  const now = new Date()
   const { data: shop, error: se } = await sb.from('shops').insert({
     owner_id: u.user.id, email, email_normalized: norm, name, owner_name: owner, mobile, whatsapp,
-    city, business_type: btype, ref_link: ref, review_due_at: due.toISOString(), signup_product: 'orders',
+    city, business_type: btype, ref_link: ref,
+    review_due_at: shouldAutoApprove ? null : due.toISOString(),
+    signup_product: 'orders',
+    status: shouldAutoApprove ? 'approved' : 'pending_review',
+    plan: 'free', plan_start: now.toISOString(), monthly_overage_limit: 100,
+    reviewed_by: shouldAutoApprove ? 'system_auto' : null,
+    reviewed_at: shouldAutoApprove ? now.toISOString() : null,
   }).select().single()
   if (se) { await sb.auth.admin.deleteUser(u.user.id); return json({ error: se.code === '23505' ? 'This email is already registered.' : 'Could not create shop' }, se.code === '23505' ? 409 : 500) }
 
+  // For auto-approved shops, immediately start their trial so they can access the dashboard
+  if (shouldAutoApprove) {
+    try {
+      await sb.rpc('start_trial', { p_shop: shop.id, p_product: 'orders' })
+    } catch (e) { console.error('start_trial failed for auto-approved shop', shop.id, e.message) }
+  }
+
   const flags = []
   if (DISPOSABLE.has(email.split('@')[1])) flags.push('disposable email domain')
-  const { count } = await sb.from('shops').select('id', { count: 'exact', head: true }).or(`mobile.eq.${mobile},whatsapp.eq.${whatsapp}`).neq('id', shop.id)
-  if (count) flags.push(`mobile/WhatsApp already used by ${count} other shop(s)`)
+  const { count: dupeContactCount } = await sb.from('shops').select('id', { count: 'exact', head: true }).or(`mobile.eq.${mobile},whatsapp.eq.${whatsapp}`).neq('id', shop.id)
+  if (dupeContactCount) flags.push(`mobile/WhatsApp already used by ${dupeContactCount} other shop(s)`)
   const wa = 'https://wa.me/91' + whatsapp
   try {
     await sendMail(env, {
       to: String(env.ADMIN_EMAILS || '').split(',').map((s) => s.trim()).filter(Boolean),
-      subject: `New ORDERS signup: ${name}, review by ${hhmm(due)} IST`,
-      html: `<h3>New shop signup (Orders)</h3><p><b>${esc(name)}</b> · ${esc(owner)}<br>Mobile: ${mobile}<br>WhatsApp: <a href="${wa}">${whatsapp} (tap to chat)</a><br>Email: ${esc(email)}<br>City: ${esc(city || '-')} · Business: ${esc(btype || '-')}${ref ? `<br>Link: ${esc(ref)}` : ''}</p>
-        <p>Signed up: ${hhmm(new Date())} IST · <b>Review by: ${hhmm(due)} IST</b></p><p>Flags: ${flags.length ? esc(flags.join('; ')) : 'none'}</p>
-        <p><a href="${env.ADMIN_DASH_URL}" style="background:#00c9a7;color:#0f1923;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600">Review in dashboard</a></p>`,
+      subject: shouldAutoApprove
+        ? `🎉 New ORDERS signup [AUTO-APPROVED #${slotNum}/10]: ${name}`
+        : `⏳ New ORDERS signup [PENDING REVIEW - gate active]: ${name}, review by ${hhmm(due)} IST`,
+      html: `<h3>New shop signup (Orders)</h3>
+        <p><b>${esc(name)}</b> · ${esc(owner)}<br>Mobile: ${mobile}<br>WhatsApp: <a href="${wa}">${whatsapp} (tap to chat)</a><br>Email: ${esc(email)}<br>City: ${esc(city || '-')} · Business: ${esc(btype || '-')}${ref ? `<br>Link: ${esc(ref)}` : ''}</p>
+        <p>Signed up: ${hhmm(now)} IST${shouldAutoApprove ? ` · <b style="color:#00c9a7">AUTO-APPROVED (slot ${slotNum} of 10)</b> — shop can log in immediately` : ` · <b>Review by: ${hhmm(due)} IST</b>`}</p>
+        <p>Flags: ${flags.length ? esc(flags.join('; ')) : 'none'}</p>
+        <p><a href="${env.ADMIN_DASH_URL}" style="background:#00c9a7;color:#0f1923;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600">View in dashboard</a></p>`,
     })
   } catch (e) { console.error('alert email failed', e.message) } // signup still succeeds; the dashboard queue shows it
   return json({ ok: true })

@@ -92,12 +92,48 @@ export default function ProductsPage() {
       {loading && <div className="empty-state">Loading…</div>}
       {!loading && !shown.length && <div className="card empty-state"><div className="empty-state-icon">🧺</div><div className="empty-state-title">{list.length ? 'No match' : 'No products yet'}</div><div className="empty-state-text">Add one, or import your list from Excel.</div></div>}
       {!!shown.length && <div className="card" style={{ padding: '4px 16px' }}>
-        {shown.map(p => (
-          <div className="item-row" key={p.id}>
-            <div style={{ minWidth: 0 }}><b>{p.name}</b><div className="text-muted" style={{ fontSize: '.78rem' }}>{[p.category, p.unit && `per ${p.unit}`].filter(Boolean).join(' · ') || '—'}{taxOn && (p.cgst || p.sgst || p.igst) ? ` · GST ${[p.cgst && `C${Number(p.cgst)}`, p.sgst && `S${Number(p.sgst)}`, p.igst && `I${Number(p.igst)}`].filter(Boolean).join(' ')}%` : ''}</div></div>
-            <div style={{ textAlign: 'right', flexShrink: 0 }}><b>{inr(p.unit_price)}</b>{taxOn && Number(p.total_price) > Number(p.unit_price) && <div className="text-muted" style={{ fontSize: '.72rem' }}>{inr(p.total_price)} with tax</div>}
-              <div className="flex gap-2 mt-1" style={{ justifyContent: 'flex-end' }}><button className="btn btn-secondary btn-sm" disabled={!canWrite} onClick={() => { setErr(''); setEdit({ ...p, cgst: p.cgst ?? '', sgst: p.sgst ?? '', igst: p.igst ?? '' }) }}>Edit</button><button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} disabled={!canWrite} onClick={() => del(p)}>Delete</button></div></div>
-          </div>))}
+        {shown.map(p => {
+          const speedDialNum = list.findIndex(x => x.id === p.id) + 1
+          return (
+            <div className="item-row" key={p.id}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {speedDialNum > 0 && (
+                    <span style={{
+                      background: 'var(--teal-light, #e6fffa)',
+                      color: 'var(--teal-dark, #0d9488)',
+                      border: '1px solid var(--teal, #0d9488)',
+                      fontSize: '.72rem',
+                      fontWeight: 700,
+                      padding: '1px 6px',
+                      borderRadius: 4,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 2,
+                    }}>
+                      ⚡ #{speedDialNum}
+                    </span>
+                  )}
+                  <b>{p.name}</b>
+                </div>
+                <div className="text-muted" style={{ fontSize: '.78rem', marginTop: 2 }}>
+                  {[p.category, p.unit && `per ${p.unit}`].filter(Boolean).join(' · ') || '—'}
+                  {taxOn && (p.cgst || p.sgst || p.igst) ? ` · GST ${[p.cgst && `C${Number(p.cgst)}`, p.sgst && `S${Number(p.sgst)}`, p.igst && `I${Number(p.igst)}`].filter(Boolean).join(' ')}%` : ''}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <b>{inr(p.unit_price)}</b>
+                {taxOn && Number(p.total_price) > Number(p.unit_price) && (
+                  <div className="text-muted" style={{ fontSize: '.72rem' }}>{inr(p.total_price)} with tax</div>
+                )}
+                <div className="flex gap-2 mt-1" style={{ justifyContent: 'flex-end' }}>
+                  <button className="btn btn-secondary btn-sm" disabled={!canWrite} onClick={() => { setErr(''); setEdit({ ...p, cgst: p.cgst ?? '', sgst: p.sgst ?? '', igst: p.igst ?? '' }) }}>Edit</button>
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} disabled={!canWrite} onClick={() => del(p)}>Delete</button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>}
 
       {edit && <div className="modal-overlay" onClick={() => setEdit(null)}><div className="modal" onClick={e => e.stopPropagation()}>

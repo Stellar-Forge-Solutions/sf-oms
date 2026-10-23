@@ -1,16 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
-import { inr, calcLine, pctFor } from '../lib/orderUtils'
+import { inr, pctFor } from '../lib/orderUtils'
 
 export default function SpeedDialPicker({ products = [], settings, onAdd }) {
   const [selectedProduct, setSelectedProduct] = useState(null)
+  const [selectedIndex, setSelectedIndex] = useState(null)
   const [qty, setQty] = useState('1')
-  const [filter, setFilter] = useState('')
-  const inputRef = useRef(null)
+  const [directNum, setDirectNum] = useState('')
+  const qtyInputRef = useRef(null)
 
   useEffect(() => {
-    if (selectedProduct && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
+    if (selectedProduct && qtyInputRef.current) {
+      qtyInputRef.current.focus()
+      qtyInputRef.current.select()
     }
   }, [selectedProduct])
 
@@ -18,14 +19,20 @@ export default function SpeedDialPicker({ products = [], settings, onAdd }) {
     return null
   }
 
-  const query = filter.trim().toLowerCase()
-  const visibleProducts = query
-    ? products.filter(p => p.name.toLowerCase().includes(query) || (p.category && p.category.toLowerCase().includes(query)))
-    : products.slice(0, 15) // Top 15 quick products
-
-  const handleSelect = (product) => {
+  const handleSelect = (product, idx) => {
     setSelectedProduct(product)
+    setSelectedIndex(idx + 1)
     setQty('1')
+  }
+
+  const handleDirectJump = (e) => {
+    const val = e.target.value
+    setDirectNum(val)
+    const n = parseInt(val, 10)
+    if (n >= 1 && n <= products.length) {
+      handleSelect(products[n - 1], n - 1)
+      setDirectNum('')
+    }
   }
 
   const handleAdd = (e) => {
@@ -49,8 +56,8 @@ export default function SpeedDialPicker({ products = [], settings, onAdd }) {
 
     onAdd(it)
     setSelectedProduct(null)
+    setSelectedIndex(null)
     setQty('1')
-    setFilter('')
   }
 
   return (
@@ -69,9 +76,9 @@ export default function SpeedDialPicker({ products = [], settings, onAdd }) {
         gap: 8,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: '1rem' }}>⚡</span>
-          <span style={{ fontWeight: 600, fontSize: '.88rem', color: 'var(--text)' }}>
-            Speed Dial Items
+          <span style={{ fontSize: '1.1rem' }}>⚡</span>
+          <span style={{ fontWeight: 700, fontSize: '.88rem', color: 'var(--text)' }}>
+            Speed Dial
           </span>
           <span style={{
             fontSize: '.72rem',
@@ -79,122 +86,120 @@ export default function SpeedDialPicker({ products = [], settings, onAdd }) {
             color: 'var(--teal-dark, #0d9488)',
             padding: '2px 6px',
             borderRadius: 6,
-            fontWeight: 500
+            fontWeight: 600
           }}>
-            Tap & enter qty
+            Select number
           </span>
         </div>
-        {products.length > 8 && (
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: '.75rem', color: 'var(--text-muted)' }}>Type #:</span>
           <input
-            type="text"
-            placeholder="Filter speed dial…"
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
+            type="number"
+            min="1"
+            max={products.length}
+            placeholder="1.."
+            value={directNum}
+            onChange={handleDirectJump}
             style={{
-              fontSize: '.75rem',
-              padding: '4px 8px',
+              width: 50,
+              fontSize: '.82rem',
+              fontWeight: 700,
+              textAlign: 'center',
+              padding: '4px 6px',
               borderRadius: 6,
-              border: '1px solid var(--border, #cbd5e1)',
-              background: '#fff',
-              maxWidth: 130
+              border: '1.5px solid var(--border, #cbd5e1)',
+              background: '#fff'
             }}
           />
-        )}
+        </div>
       </div>
 
-      {/* Grid of speed dial tiles */}
+      {/* Clean Number-Only Tiles (1, 2, 3...) */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+        display: 'flex',
+        flexWrap: 'wrap',
         gap: 8,
+        maxHeight: 140,
+        overflowY: 'auto',
+        padding: '2px 0'
       }}>
-        {visibleProducts.map((p, idx) => {
-          const isSelected = selectedProduct?.id === p.id || selectedProduct?.name === p.name
+        {products.map((p, idx) => {
+          const num = idx + 1
+          const isSelected = selectedIndex === num
           return (
             <button
               key={p.id || p.name}
               type="button"
-              onClick={() => handleSelect(p)}
+              title={`${num}. ${p.name} (${inr(p.unit_price)}${p.unit ? `/${p.unit}` : ''})`}
+              onClick={() => handleSelect(p, idx)}
               style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-start',
-                textAlign: 'left',
-                padding: '8px 10px',
+                width: 44,
+                height: 44,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 borderRadius: 8,
+                fontSize: '.95rem',
+                fontWeight: 700,
+                cursor: 'pointer',
                 border: isSelected
                   ? '2px solid var(--teal, #0d9488)'
-                  : '1px solid var(--border, #e2e8f0)',
-                background: isSelected ? 'var(--teal-light, #f0fdfa)' : '#fff',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                position: 'relative',
+                  : '1px solid var(--border, #cbd5e1)',
+                background: isSelected
+                  ? 'var(--teal, #0d9488)'
+                  : '#fff',
+                color: isSelected
+                  ? '#fff'
+                  : 'var(--text, #1e293b)',
+                boxShadow: isSelected
+                  ? '0 2px 4px rgba(13,148,136,0.3)'
+                  : '0 1px 2px rgba(0,0,0,0.04)',
+                transition: 'all 0.1s ease',
               }}
             >
-              <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
-                <span style={{
-                  fontSize: '.68rem',
-                  fontWeight: 700,
-                  color: isSelected ? 'var(--teal, #0d9488)' : 'var(--text-muted, #64748b)',
-                  background: isSelected ? 'transparent' : 'rgba(0,0,0,0.04)',
-                  padding: '1px 4px',
-                  borderRadius: 4
-                }}>
-                  #{idx + 1}
-                </span>
-                {p.unit && (
-                  <span style={{ fontSize: '.68rem', color: 'var(--text-muted, #94a3b8)' }}>
-                    /{p.unit}
-                  </span>
-                )}
-              </div>
-              <div style={{
-                fontWeight: 600,
-                fontSize: '.82rem',
-                color: 'var(--text, #1e293b)',
-                lineHeight: 1.25,
-                marginBottom: 2,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                width: '100%'
-              }}>
-                {p.name}
-              </div>
-              <div style={{ fontSize: '.78rem', color: 'var(--teal-dark, #0f766e)', fontWeight: 600 }}>
-                {inr(p.unit_price)}
-              </div>
+              {num}
             </button>
           )
         })}
       </div>
 
-      {/* Selected Product Quantity Input Popup / Inline Strip */}
+      {/* Selected Product Quantity Input Strip */}
       {selectedProduct && (
         <form
           onSubmit={handleAdd}
           style={{
             marginTop: 12,
-            padding: '10px 12px',
+            padding: '10px 14px',
             background: '#fff',
             borderRadius: 8,
-            border: '1.5px solid var(--teal, #0d9488)',
+            border: '2px solid var(--teal, #0d9488)',
             display: 'flex',
             flexWrap: 'wrap',
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 10,
-            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.06)'
+            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.08)'
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 120 }}>
-            <span style={{ fontSize: '.88rem', fontWeight: 700, color: 'var(--text)' }}>
-              {selectedProduct.name}
-            </span>
-            <span style={{ fontSize: '.75rem', color: 'var(--text-muted)' }}>
-              Rate: {inr(selectedProduct.unit_price)} {selectedProduct.unit ? `per ${selectedProduct.unit}` : ''}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{
+                background: 'var(--teal, #0d9488)',
+                color: '#fff',
+                padding: '2px 6px',
+                borderRadius: 4,
+                fontSize: '.75rem',
+                fontWeight: 700
+              }}>
+                #{selectedIndex}
+              </span>
+              <span style={{ fontSize: '.92rem', fontWeight: 700, color: 'var(--text)' }}>
+                {selectedProduct.name}
+              </span>
+            </div>
+            <span style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>
+              Rate: <b>{inr(selectedProduct.unit_price)}</b> {selectedProduct.unit ? `per ${selectedProduct.unit}` : ''}
             </span>
           </div>
 
@@ -203,7 +208,7 @@ export default function SpeedDialPicker({ products = [], settings, onAdd }) {
               Qty:
             </label>
             <input
-              ref={inputRef}
+              ref={qtyInputRef}
               type="number"
               inputMode="decimal"
               step="any"
@@ -214,8 +219,8 @@ export default function SpeedDialPicker({ products = [], settings, onAdd }) {
               style={{
                 width: 90,
                 padding: '6px 10px',
-                fontSize: '.95rem',
-                fontWeight: 600,
+                fontSize: '1rem',
+                fontWeight: 700,
                 textAlign: 'center',
                 border: '1.5px solid var(--teal, #0d9488)',
                 borderRadius: 6,
@@ -223,21 +228,21 @@ export default function SpeedDialPicker({ products = [], settings, onAdd }) {
               }}
             />
             {selectedProduct.unit && (
-              <span style={{ fontSize: '.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+              <span style={{ fontSize: '.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>
                 {selectedProduct.unit}
               </span>
             )}
             <button
               type="submit"
               className="btn btn-primary btn-sm"
-              style={{ padding: '6px 14px', fontSize: '.82rem', fontWeight: 600 }}
+              style={{ padding: '6px 16px', fontSize: '.85rem', fontWeight: 600 }}
             >
               ✓ Add
             </button>
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              onClick={() => setSelectedProduct(null)}
+              onClick={() => { setSelectedProduct(null); setSelectedIndex(null) }}
               style={{ color: 'var(--text-muted)', padding: '6px 8px' }}
             >
               ✕

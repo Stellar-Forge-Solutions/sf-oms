@@ -42,7 +42,7 @@ export const PAY = {
 // ── Defaults for shop settings ────────────────────────────
 export const DEFAULT_SETTINGS = {
   stages: DEFAULT_STAGES, category_label: 'Category', notify_channel: 'whatsapp',
-  fields: { category: true, description: false, unit: true, tax: false, freight: true, notes: false },
+  fields: { category: true, description: false, unit: true, tax: false, freight: true, notes: false, speed_dial: false },
   tax: { cgst: { on: false, pct: 9 }, sgst: { on: false, pct: 9 }, igst: { on: false, pct: 18 } },
   printer_mode: 'thermal', order_prefix: 'ORD-', custom_url: '', brand_color: '', hide_powered: false,
 }

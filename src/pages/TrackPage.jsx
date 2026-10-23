@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { PAY, inr, fmtDateTime, stageIdx, waNumber } from '../lib/orderUtils'
+import { PAY, inr, fmtDate, fmtDateTime, stageIdx, waNumber } from '../lib/orderUtils'
 
 // PUBLIC page (no login). Timeline first, then items, totals, payment and the bill download.
 export default function TrackPage() {

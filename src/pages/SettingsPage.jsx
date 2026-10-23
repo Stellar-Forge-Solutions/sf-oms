@@ -10,7 +10,15 @@ import { contactUrl, upgradeUrl } from '../lib/planHelper'
 import { CORE_KEYS, normStages } from '../lib/orderUtils'
 
 const SHOP_KEYS = ['name', 'tagline', 'address', 'mobile', 'whatsapp', 'gst_no', 'website', 'thank_you']
-const FIELD_LABELS = [['category', 'Category'], ['description', 'Description'], ['unit', 'Unit'], ['tax', 'Tax (GST)'], ['freight', 'Freight / delivery charges'], ['notes', 'Order notes']]
+const FIELD_LABELS = [
+  ['category', 'Category'],
+  ['description', 'Description'],
+  ['unit', 'Unit'],
+  ['tax', 'Tax (GST)'],
+  ['freight', 'Freight / delivery charges'],
+  ['notes', 'Order notes'],
+  ['speed_dial', '⚡ Speed dial / Quick items (one-tap entry for fast counter billing)'],
+]
 
 function resizeLogo(file, max = 400) {
   return new Promise((resolve, reject) => {

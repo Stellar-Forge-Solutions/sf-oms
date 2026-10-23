@@ -136,3 +136,8 @@ UPDATE entitlements
 SET plan_tier = 'free'
 WHERE product = 'expenses'
   AND plan_tier IS NULL;
+
+-- Index for fast approved-shop count (used by auto-approval gate in signup API)
+CREATE INDEX IF NOT EXISTS idx_shops_status_deleted
+  ON shops (status, deleted_at)
+  WHERE deleted_at IS NULL;

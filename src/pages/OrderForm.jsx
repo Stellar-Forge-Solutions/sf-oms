@@ -5,6 +5,7 @@ import { useShop } from '../lib/ShopContext'
 import { useAuth } from '../lib/AuthContext'
 import { useToast } from '../components/Toast'
 import ItemSheet from '../components/ItemSheet'
+import SpeedDialPicker from '../components/SpeedDialPicker'
 import { guardWrite, logoDataUrl } from '../lib/shop'
 import { buildBillPdf } from '../lib/billDoc'
 import { calcLine, calcOrder, orderRowTotals, itemRow, inr, r2, digits10, taxActive, PAY } from '../lib/orderUtils'
@@ -396,7 +397,16 @@ export default function OrderForm() {
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-header"><div className="section-title">Items</div>
           <button className="btn btn-primary btn-sm" onClick={() => setSheet({ index: null, item: null })}>+ Add item</button></div>
-        {!items.length && <div className="empty-state" style={{ padding: 24 }}><div className="empty-state-text">No items yet. Tap “Add item”.</div></div>}
+
+        {f.speed_dial && (
+          <SpeedDialPicker
+            products={products}
+            settings={settings}
+            onAdd={(newItem) => setItems([...items, newItem])}
+          />
+        )}
+
+        {!items.length && <div className="empty-state" style={{ padding: 24 }}><div className="empty-state-text">No items yet. Tap “Add item”{f.speed_dial ? ' or pick from Speed Dial above' : ''}.</div></div>}
         {items.length > 0 && (
           <div className="items-table-wrap">
             <table className="items-table">

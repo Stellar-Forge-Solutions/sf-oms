@@ -47,7 +47,7 @@ function Nav() {
   const { pathname } = useLocation()
   const { user, signOut } = useAuth()
   const { shop, role, isOwner } = useShop()
-  if (pathname.startsWith('/track') || pathname.startsWith('/bill') || !shop || shop.status !== 'approved') return null
+  if (pathname.startsWith('/track') || pathname.startsWith('/bill/') || !shop || shop.status !== 'approved') return null
   const displayName = user?.email?.split('@')[0] ?? ''
   return (
     <nav className="nav">
@@ -76,7 +76,7 @@ function Nav() {
 function PoweredBy() {
   const { pathname } = useLocation()
   const { shop, settings } = useShop()
-  if (pathname.startsWith('/track') || pathname.startsWith('/bill') || !shop || shop.status !== 'approved' || settings?.hide_powered) return null
+  if (pathname.startsWith('/track') || pathname.startsWith('/bill/') || !shop || shop.status !== 'approved' || settings?.hide_powered) return null
   return (
     <div style={{ textAlign: 'center', fontSize: '0.72rem', padding: '14px 0 22px' }}>
       <a

@@ -125,7 +125,7 @@ export default function BillingPage() {
                 </div>
               </div>
               <div>
-                <div className="text-muted" style={{ fontSize: '.75rem' }}>Metered overage (₹0.30/ea)</div>
+                <div className="text-muted" style={{ fontSize: '.75rem' }}>Metered overage ({monthlyUsage.overageRate ? `₹${monthlyUsage.overageRate}/ea` : '₹0.30/ea'})</div>
                 <div style={{ fontWeight: 700, fontSize: '1rem', color: monthlyUsage.overageAmount > 0 ? 'var(--danger)' : 'var(--ink)' }}>
                   {inr(monthlyUsage.overageAmount)}
                 </div>
@@ -218,7 +218,7 @@ export default function BillingPage() {
                                     style={{ background: '#fee2e2', color: '#991b1b', fontSize: '.72rem', fontWeight: 700 }}
                                     title="Metered overage order"
                                   >
-                                    +₹0.30 overage
+                                    +{monthlyUsage.overageRate != null ? `₹${monthlyUsage.overageRate}` : '₹0.30'} overage
                                   </span>
                                 ) : (
                                   <span
@@ -410,7 +410,16 @@ export default function BillingPage() {
             </div>
             <div className="text-muted" style={{ fontSize: '.75rem', marginBottom: 14 }}>Customized per shop</div>
             <ul style={{ paddingLeft: 18, fontSize: '.8rem', lineHeight: 1.6, margin: '0 0 16px' }}>
-              <li><b>Unlimited orders</b></li>
+              <li>
+                <b>
+                  {plan.key === 'pro' && !isUnlimited
+                    ? `${plan.includedOrders} orders / month included`
+                    : 'Unlimited orders (or custom quota)'}
+                </b>
+              </li>
+              {plan.key === 'pro' && !isUnlimited && monthlyUsage.overageRate > 0 && (
+                <li>₹{monthlyUsage.overageRate} per extra order</li>
+              )}
               <li><b>Staff logins</b> (multi-user roles)</li>
               <li><b>Shop branding</b> (logo & colors)</li>
               <li>Custom order stages (up to 8)</li>

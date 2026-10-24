@@ -1,11 +1,31 @@
 import { PLANS, UPGRADE_WHATSAPP } from './plans.config'
 import { IST } from './orderUtils'
 
-// Returns normalized plan definition for a shop
+// Returns normalized plan definition for a shop.
+// Checks custom order limit and overage rate from shop or ent.
 export function getPlan(shop, ent) {
-  // Check shop.plan first, fallback to ent.plan, default to 'free'
-  const planKey = (shop?.plan || ent?.plan || 'free').toLowerCase()
-  return PLANS[planKey] || PLANS.free
+  // Check shop.plan first, fallback to ent.plan_tier or ent.plan, default to 'free'
+  const planKey = (shop?.plan || ent?.plan_tier || ent?.plan || 'free').toLowerCase()
+  const base = PLANS[planKey] || PLANS.free
+
+  // Admin can set a custom per-shop allowance on shops or entitlements
+  const rawCustomLimit = shop?.custom_order_limit ?? shop?.orders_limit ?? shop?.order_limit ??
+                         ent?.custom_order_limit ?? ent?.orders_limit ?? ent?.order_limit
+  const customLimit = rawCustomLimit != null && rawCustomLimit !== '' ? Number(rawCustomLimit) : null
+
+  // Admin can set a custom overage rate on entitlements or shop
+  const rawRate = ent?.overage_rate ?? shop?.overage_rate
+  const overageRate = rawRate != null && rawRate !== '' ? Number(rawRate) : base.overageRate
+
+  let updated = { ...base }
+  if (overageRate != null && !isNaN(overageRate)) {
+    updated.overageRate = overageRate
+  }
+
+  if (customLimit !== null && !isNaN(customLimit) && customLimit > 0) {
+    updated.includedOrders = customLimit
+  }
+  return updated
 }
 
 // Single central feature gate helper
@@ -26,9 +46,11 @@ export function getMonthBounds(d = new Date()) {
   return { from, to, monthLabel: from.toLocaleString('en-IN', { month: 'long', year: 'numeric', timeZone: IST }) }
 }
 
-// Computes overage usage & costs for an order count
-export function calculateOverage(ordersCount, plan, overageLimit = 100) {
-  const included = plan.includedOrders
+// Computes overage usage & costs for an order count.
+// overageRateOverride: pass entitlements.overage_rate from DB to use per-shop rate instead of plan default.
+// NOTE: plan.includedOrders already reflects shop.custom_order_limit if set (see getPlan).
+export function calculateOverage(ordersCount, plan, overageLimit = 100, overageRateOverride = null) {
+  const included = plan.includedOrders  // already customised by getPlan if admin set custom_order_limit
   const used = Number(ordersCount) || 0
   const isUnlimited = included === Infinity
 
@@ -48,7 +70,9 @@ export function calculateOverage(ordersCount, plan, overageLimit = 100) {
   }
 
   const overageOrders = Math.max(0, used - included)
-  const overageAmount = Math.round(overageOrders * (plan.overageRate || 0.30) * 100) / 100
+  // overageRateOverride: per-shop DB rate (from entitlements.overage_rate); fallback to plan config then 0.30
+  const rate = overageRateOverride != null ? overageRateOverride : (plan.overageRate ?? 0.30)
+  const overageAmount = Math.round(overageOrders * rate * 100) / 100
   const pctUsed = Math.min(100, Math.round((used / included) * 100))
   const remainingIncluded = Math.max(0, included - used)
   const limit = Number(overageLimit ?? 100)
@@ -63,6 +87,7 @@ export function calculateOverage(ordersCount, plan, overageLimit = 100) {
     pctUsed,
     overageOrders,
     overageAmount,
+    overageRate: rate,
     overageLimit: limit,
     isNearLimit: used >= included * 0.8 && used < included,
     isAtLimit: used >= included,

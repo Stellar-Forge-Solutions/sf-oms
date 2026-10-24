@@ -106,7 +106,7 @@ export function waNumber(v) {            // 10 digits -> add India code; longer 
 }
 export const appBase = (settings) => (settings?.custom_url?.trim() ? settings.custom_url.trim().replace(/\/+$/, '') : window.location.origin)
 export const trackUrl = (o, settings) => `${appBase(settings)}/track/${o.token}`
-export const billUrl = (o, settings) => (o.bill_path ? `${appBase(settings)}/api/bill?t=${o.token}` : '')
+export const billUrl = (o, settings) => (o.bill_path || o.bill_source === 'generated' ? `${appBase(settings)}/api/bill?t=${o.token}` : '')
 
 // ── Dates (all in India time) ─────────────────────────────
 export const fmtDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: IST })

@@ -34,7 +34,7 @@ export async function onRequestPost({ request, env }) {
   const base = (s.custom_url || env.APP_URL || '').replace(/\/+$/, '')
   if (!base) return json({ error: 'APP_URL is not configured on the server' }, 500)
   const label = stageLabel(s.stages, o.stage_key), no = s.order_prefix + String(o.order_no).padStart(5, '0')
-  const track = `${base}/track/${o.token}`, bill = o.bill_path ? `${base}/api/bill?t=${o.token}` : null
+  const track = `${base}/track/${o.token}`, bill = (o.bill_path || o.bill_source === 'generated') ? `${base}/api/bill?t=${o.token}` : null
   const color = /^#[0-9a-f]{6}$/i.test(s.brand_color || '') ? s.brand_color : '#00a88c'
   const logo = shop.logo_path ? `${env.SUPABASE_URL}/storage/v1/object/public/logos/${shop.logo_path}` : null
   const btn = (href, text, solid) => `<a href="${esc(href)}" style="display:inline-block;margin:0 8px 8px 0;padding:12px 22px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;${solid ? `background:${color};color:#ffffff;` : `border:1.5px solid ${color};color:${color};`}">${text}</a>`

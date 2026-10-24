@@ -13,6 +13,7 @@ import OrderDetail from './pages/OrderDetail'
 import ProductsPage from './pages/ProductsPage'
 import CustomersPage from './pages/CustomersPage'
 import TrackPage from './pages/TrackPage'
+import BillPage from './pages/BillPage'
 import ConnectPrinterPage from './pages/ConnectPrinterPage'
 import BillingPage from './pages/BillingPage'
 
@@ -46,7 +47,7 @@ function Nav() {
   const { pathname } = useLocation()
   const { user, signOut } = useAuth()
   const { shop, role, isOwner } = useShop()
-  if (pathname.startsWith('/track') || !shop || shop.status !== 'approved') return null
+  if (pathname.startsWith('/track') || pathname.startsWith('/bill') || !shop || shop.status !== 'approved') return null
   const displayName = user?.email?.split('@')[0] ?? ''
   return (
     <nav className="nav">
@@ -75,7 +76,7 @@ function Nav() {
 function PoweredBy() {
   const { pathname } = useLocation()
   const { shop, settings } = useShop()
-  if (pathname.startsWith('/track') || !shop || shop.status !== 'approved' || settings?.hide_powered) return null
+  if (pathname.startsWith('/track') || pathname.startsWith('/bill') || !shop || shop.status !== 'approved' || settings?.hide_powered) return null
   return (
     <div style={{ textAlign: 'center', fontSize: '0.72rem', padding: '14px 0 22px' }}>
       <a
@@ -96,6 +97,7 @@ function AppShell() {
       <Nav />
       <Routes>
         <Route path="/track/:token" element={<TrackPage />} />
+        <Route path="/bill/:token" element={<BillPage />} />
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/signup" element={<PublicRoute><SignupPage /></PublicRoute>} />
         <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />

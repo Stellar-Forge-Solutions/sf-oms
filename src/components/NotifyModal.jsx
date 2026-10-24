@@ -28,7 +28,7 @@ export default function NotifyModal({ order, settings, shop, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-title">Notify {order.customer_name}?</div>
-        <div className="modal-subtitle">{orderNo(order, settings)} is now <b>{label}</b>. The message includes the tracking link{order.bill_path ? ' and the bill download link' : ''}.</div>
+        <div className="modal-subtitle">{orderNo(order, settings)} is now <b>{label}</b>. The message includes the tracking link{(order.bill_path || order.bill_source === 'generated') ? ' and the bill link' : ''}.</div>
 
         {(ch === 'whatsapp' || ch === 'both') && (hasWa
           ? <a className="btn btn-primary btn-full btn-lg" style={{ marginBottom: 10, background: '#25D366', color: '#fff' }} target="_blank" rel="noopener noreferrer" href={whatsappLink(order, settings, shop)} onClick={() => setTimeout(onClose, 400)}>💬 Send on WhatsApp</a>

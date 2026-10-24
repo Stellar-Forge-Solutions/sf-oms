@@ -123,15 +123,22 @@ export default function OrderDetail() {
     setSheet(false); toast(stillPaid ? 'Item added. Payment is now “Partly paid” because the total grew' : 'Item added'); load()
   }
 
+  const hasBill = !!o.bill_path || o.bill_source === 'generated'
+
   const generate = async () => {
     if (!guardWrite('Generating the bill')) return
     setBusy('gen')
     try {
-      const logo = await logoDataUrl(shop)
-      const blob = await buildBillPdf({ order: o, items, shop, settings, logo })
-      await storeBill(blob, 'pdf', 'application/pdf', 'generated')
-      toast('Bill generated')
-    } catch (e) { toast('Could not generate the bill: ' + e.message, 'error') }
+      // If there was an uploaded file before, remove it from storage to free space
+      if (o.bill_path) await supabase.storage.from('order-bills').remove([o.bill_path])
+      await supabase.from('orders').update({
+        bill_path: null,
+        bill_source: 'generated',
+        bill_updated_at: new Date().toISOString()
+      }).eq('id', o.id)
+      await load()
+      toast('Switched to dynamic on-demand bill (0 KB storage)')
+    } catch (e) { toast('Could not update bill: ' + e.message, 'error') }
     setBusy('')
   }
 
@@ -216,7 +223,7 @@ export default function OrderDetail() {
             </button>
           )}
           <button className="btn btn-secondary" onClick={() => setNotify(true)}>🔔 Notify customer</button>
-          {o.bill_path && (
+          {hasBill && (
             <a
               className="btn btn-secondary"
               href={billUrl(o, settings)}
@@ -224,7 +231,7 @@ export default function OrderDetail() {
               rel="noopener noreferrer"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              ⬇️ Download bill
+              🧾 {o.bill_source === 'uploaded' ? 'Download bill' : 'View / Download bill'}
             </a>
           )}
         </div>
@@ -311,13 +318,22 @@ export default function OrderDetail() {
           {/* Bill */}
           <div className="card" style={{ marginBottom: 14 }}>
             <div className="section-title" style={{ marginBottom: 4 }}>Bill</div>
-            <div className="text-muted" style={{ marginBottom: 10 }}>{o.bill_path ? `${o.bill_source === 'uploaded' ? 'Uploaded' : 'Generated'} ${fmtDateTime(o.bill_updated_at)}` : 'No bill yet'}</div>
-            {staleBill && <div className="hint-box" style={{ background: '#fff7e6', borderColor: '#f59e0b', borderStyle: 'solid' }}>The order changed after this bill was made. Generate it again so customers get the latest one.</div>}
+            <div className="text-muted" style={{ marginBottom: 10 }}>
+              {o.bill_source === 'uploaded' ? `Uploaded ${fmtDateTime(o.bill_updated_at)}` : hasBill ? `Dynamic invoice ready (0 KB storage)` : 'No bill yet'}
+            </div>
             <div className="flex flex-col gap-2">
-              <button className="btn btn-primary" disabled={!!busy || !canWrite} onClick={generate}>{busy === 'gen' ? 'Generating…' : o.bill_path ? '🧾 Generate bill again' : '🧾 Generate bill'}</button>
-              <button className="btn btn-secondary" disabled={!!busy || !canWrite} onClick={() => fileRef.current.click()}>{busy === 'up' ? 'Uploading…' : '⬆️ Upload your own bill'}</button>
+              <a className="btn btn-primary" href={billUrl(o, settings)} target="_blank" rel="noopener noreferrer">
+                🧾 {hasBill ? 'View / Download bill' : 'View invoice'}
+              </a>
+              <button className="btn btn-secondary" disabled={!!busy || !canWrite} onClick={() => fileRef.current.click()}>
+                {busy === 'up' ? 'Uploading…' : '📁 Upload physical bill / scan'}
+              </button>
               <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" hidden onChange={upload} />
-              {o.bill_path && <a className="btn btn-secondary" href={billUrl(o, settings)} target="_blank" rel="noopener noreferrer">⬇️ View / download bill</a>}
+              {o.bill_source === 'uploaded' && (
+                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--teal-dark)' }} disabled={!!busy || !canWrite} onClick={generate}>
+                  ⚡ Switch back to auto-generated bill (free storage)
+                </button>
+              )}
             </div>
             <div className="divider" />
             <div className="text-muted" style={{ marginBottom: 8 }}>Print</div>

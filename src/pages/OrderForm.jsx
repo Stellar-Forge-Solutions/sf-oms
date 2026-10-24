@@ -244,14 +244,11 @@ export default function OrderForm() {
     if (!id && billOption !== 'none') {
       try {
         if (billOption === 'generate') {
-          const logo = await logoDataUrl(shop)
-          const fullOrder = { ...row, id: orderId, order_no: createdOrder?.order_no || 1, created_at: new Date().toISOString() }
-          const blob = await buildBillPdf({ order: fullOrder, items, shop, settings, logo })
-          const path = `${shop.id}/${orderId}/bill-${Date.now()}.pdf`
-          const up = await supabase.storage.from('order-bills').upload(path, blob, { contentType: 'application/pdf' })
-          if (!up.error) {
-            await supabase.from('orders').update({ bill_path: path, bill_source: 'generated', bill_updated_at: new Date().toISOString() }).eq('id', orderId)
-          }
+          // Zero-storage dynamic generation: simply mark bill_source as generated (no PDF or storage upload needed)
+          await supabase.from('orders').update({
+            bill_source: 'generated',
+            bill_updated_at: new Date().toISOString()
+          }).eq('id', orderId)
         } else if (billOption === 'upload' && billFile) {
           const ext = (billFile.name.split('.').pop() || 'pdf').toLowerCase()
           const path = `${shop.id}/${orderId}/bill-${Date.now()}.${ext}`
@@ -541,7 +538,7 @@ export default function OrderForm() {
 
           {billOption === 'generate' && (
             <div className="hint-box" style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#166534', marginBottom: 0 }}>
-              ✓ A clean PDF bill with shop logo, QR code, and items table will be generated and attached automatically when this order is created.
+              ✓ A clean invoice with shop logo, items breakdown, and QR code will be generated on demand. Zero storage used.
             </div>
           )}
 

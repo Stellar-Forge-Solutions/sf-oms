@@ -94,13 +94,13 @@ export default function OrdersPage() {
               <b>{o.customer_name}</b>
               <div style={{ textAlign: 'right' }}>
                 <b>{inr(o.total)}</b>
-                {o.bill_path && (
+                {(o.bill_path || o.bill_source === 'generated') && (
                   <span
                     className="badge"
                     style={{ marginLeft: 6, background: 'var(--teal-glow)', color: 'var(--teal-dark)', fontSize: '.72rem', cursor: 'pointer' }}
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(billUrl(o, settings), '_blank') }}
                   >
-                    ⬇️ Bill
+                    🧾 Bill
                   </span>
                 )}
               </div>
@@ -127,14 +127,14 @@ export default function OrdersPage() {
             <td><StageBadge stages={stages} k={o.stage_key} /></td><td><PayBadge status={o.payment_status} /></td>
             <td style={{ textAlign: 'right' }}><b>{inr(o.total)}</b></td>
             <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-              {o.bill_path && (
+              {(o.bill_path || o.bill_source === 'generated') && (
                 <button
                   className="btn btn-ghost btn-sm"
                   style={{ padding: '4px 8px', fontSize: '.75rem', minHeight: 28 }}
-                  title="Download bill"
+                  title="View / Download bill"
                   onClick={(e) => { e.stopPropagation(); window.open(billUrl(o, settings), '_blank') }}
                 >
-                  ⬇️ Bill
+                  🧾 Bill
                 </button>
               )}
             </td>

@@ -55,21 +55,28 @@ export function ShopProvider({ children }) {
 
     const plan = getPlan(shop, ent)
 
-    // Calculate monthly orders count for the shop (IST calendar month)
+    // Per-shop overage rate stored in DB (set by admin per entitlement row)
+    const dbOverageRate = ent?.overage_rate != null ? Number(ent.overage_rate) : null
+
+    // Calculate monthly orders + revenue for the shop (IST calendar month)
     let monthlyOrdersCount = 0
+    let monthlyGrossRevenue = 0
+    let monthlyCollectedRevenue = 0
     if (shop) {
       const { from, to } = getMonthBounds()
-      const { count } = await supabase
+      const { data: monthlyOrders } = await supabase
         .from('orders')
-        .select('*', { count: 'exact', head: true })
+        .select('total, amount_paid')
         .eq('shop_id', shop.id)
         .gte('created_at', from.toISOString())
         .lt('created_at', to.toISOString())
-      monthlyOrdersCount = count || 0
+      monthlyOrdersCount = (monthlyOrders || []).length
+      monthlyGrossRevenue = (monthlyOrders || []).reduce((s, o) => s + (Number(o.total) || 0), 0)
+      monthlyCollectedRevenue = (monthlyOrders || []).reduce((s, o) => s + (Number(o.amount_paid) || 0), 0)
     }
 
     const overageLimit = shop?.monthly_overage_limit !== undefined ? shop.monthly_overage_limit : 100
-    const usage = calculateOverage(monthlyOrdersCount, plan, overageLimit)
+    const usage = calculateOverage(monthlyOrdersCount, plan, overageLimit, dbOverageRate)
 
     const isOwner = !!shop && shop.owner_id === session?.user?.id
     const isStaff = !isOwner && !!shop
@@ -98,6 +105,12 @@ export function ShopProvider({ children }) {
       isOwner,
       isStaff,
       role,
+      // Monthly revenue figures available to any component via useShop()
+      monthlyRevenue: {
+        gross: monthlyGrossRevenue,
+        collected: monthlyCollectedRevenue,
+        outstanding: monthlyGrossRevenue - monthlyCollectedRevenue,
+      },
     })
   }, [session?.user?.id])
 

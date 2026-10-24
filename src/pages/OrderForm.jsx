@@ -330,8 +330,10 @@ export default function OrderForm() {
                 You've used all {monthlyUsage.included} included orders this month
               </h3>
               <p style={{ margin: '0 0 14px', color: '#92400e', fontSize: '.85rem', lineHeight: 1.5 }}>
-                Extra orders cost <b>₹0.30 each</b> (metered overage) and will be billed at the end of the month.
-                You can also upgrade to <b>Basic (₹29/month)</b> for 300 orders/month and an ad-free experience.
+                Extra orders cost <b>₹{monthlyUsage.overageRate != null ? monthlyUsage.overageRate : '0.30'} each</b> (metered overage) and will be billed at the end of the month.
+                {plan.key === 'free' && (
+                  <span> You can also upgrade to <b>Basic (₹29/month)</b> for 300 orders/month and an ad-free experience.</span>
+                )}
               </p>
               <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
                 <button
@@ -339,7 +341,7 @@ export default function OrderForm() {
                   className="btn btn-primary btn-sm"
                   onClick={() => setOverageConfirmed(true)}
                 >
-                  Continue creating order (₹0.30)
+                  Continue creating order (₹{monthlyUsage.overageRate != null ? monthlyUsage.overageRate : '0.30'})
                 </button>
                 <a
                   className="btn btn-secondary btn-sm"
